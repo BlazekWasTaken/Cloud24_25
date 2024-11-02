@@ -17,4 +17,11 @@ app.MapGet("/helloworld", () => "Hello World!")
     .WithName("HelloWorld")
     .WithOpenApi();
 
+app.MapPost("/handle-file", async (IFormFile myFile) =>
+    {
+        // do something with file
+    })
+    .WithName("HandleFile")
+    .DisableAntiforgery();
+
 app.Run();
