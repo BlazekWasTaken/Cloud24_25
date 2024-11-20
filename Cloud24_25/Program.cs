@@ -140,5 +140,11 @@ app.MapGet("/helloworld", () => "Hello World!")
 app.MapGet("/authorizedHelloworld", [Authorize] () => "Hello World! You are authorized!")
     .WithName("AuthorizedHelloWorld")
     .WithOpenApi();
+app.MapPost("/handle-file", async (IFormFile myFile) =>
+    {
+        // do something with file
+    })
+    .WithName("HandleFile")
+    .DisableAntiforgery();
 
 app.Run();
