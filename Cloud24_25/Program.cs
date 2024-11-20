@@ -66,7 +66,11 @@ builder.Services.AddAuthentication()
             ValidateLifetime = true,
             ValidateIssuerSigningKey = true,
             ValidIssuer = builder.Configuration["Jwt:Issuer"],
-            ValidAudience = builder.Configuration["Jwt:Audience"],
+            ValidAudiences = new[]
+            {
+                builder.Configuration["Jwt:Audience"],
+                builder.Configuration["Jwt:AdminAudience"]
+            },
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]))
         };
     });
@@ -132,6 +136,60 @@ app.MapPost("/login", async (LoginDto login, UserManager<IdentityUser> userManag
 .WithName("Login")
 .WithOpenApi();
 
+app.MapPost("/registerAdmin", async (UserRegistrationDto registration,
+    UserManager<IdentityUser> userManager) =>
+{
+    if (registration.Password != "admin")
+    {
+        return Results.BadRequest(new { Message = "Wrong admin password." });
+    }
+    var user = new IdentityUser { UserName = registration.Username };
+    var result = await userManager.CreateAsync(user, registration.Password);
+
+    if (result.Succeeded)
+        return Results.Ok(new { Message = "Admin registered successfully" });
+
+    return Results.BadRequest(new { Errors = result.Errors });
+})
+.WithName("RegisterAdmin")
+.WithOpenApi();
+
+app.MapPost("/loginAdmin", async (LoginDto login, UserManager<IdentityUser> userManager,
+    IConfiguration config) =>
+{
+    if (login.Password != "admin")
+    {
+        return Results.BadRequest(new { Message = "Wrong admin password." });
+    }
+    var user = await userManager.FindByNameAsync(login.Username);
+    if (user == null || !await userManager.CheckPasswordAsync(user, login.Password))
+        return Results.Unauthorized();
+
+    var claims = new[]
+    {
+        new Claim(JwtRegisteredClaimNames.Sub, user.Id),
+        new Claim(JwtRegisteredClaimNames.UniqueName, user.UserName),
+        new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+        new Claim("aud", config["Jwt:AdminAudience"])
+    };
+
+    var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(config["Jwt:Key"]));
+    var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+
+    var token = new JwtSecurityToken(
+        issuer: config["Jwt:Issuer"],
+        audience: config["Jwt:AdminAudience"],
+        claims: claims,
+        expires: DateTime.Now.AddDays(1),
+        signingCredentials: creds);
+
+    return Results.Ok(new
+    {
+        token = new JwtSecurityTokenHandler().WriteToken(token)
+    });
+})
+.WithName("LoginAdmin")
+.WithOpenApi();
 
 app.MapGet("/helloworld", () => "Hello World!")
     .WithName("HelloWorld")
@@ -140,6 +198,22 @@ app.MapGet("/helloworld", () => "Hello World!")
 app.MapGet("/authorizedHelloworld", [Authorize] () => "Hello World! You are authorized!")
     .WithName("AuthorizedHelloWorld")
     .WithOpenApi();
+
+app.MapGet("/authorizedHelloworldAdmin", [Authorize] (HttpContext context) =>
+{
+    var user = context.User;
+
+    var audienceClaim = user.FindFirstValue("aud");
+    if (audienceClaim == builder.Configuration["Jwt:AdminAudience"])
+    {
+        return Results.Ok("Hello World! You are authorized as admin!");
+    }
+
+    return Results.Forbid();
+})
+.WithName("AuthorizedHelloWorldAdmin")
+.WithOpenApi();
+
 app.MapPost("/handle-file", async (IFormFile myFile) =>
     {
         // do something with file
