@@ -2,6 +2,10 @@
 Microsoft Visual Studio Solution File, Format Version 12.00
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Cloud24_25", "Cloud24_25\Cloud24_25.csproj", "{59529155-8DF2-426C-BE82-75F749850011}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Cloud24_25.Service", "Cloud24_25.Service\Cloud24_25.Service.csproj", "{E97DC074-7280-4BED-8D56-29C90C2E5045}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Cloud24_25.Infrastructure", "Cloud24_25.Infrastructure\Cloud24_25.Infrastructure.csproj", "{39F58152-7005-4D8C-BD0E-79DB7A5AF4F5}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -12,5 +16,13 @@ Global
 		{59529155-8DF2-426C-BE82-75F749850011}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{59529155-8DF2-426C-BE82-75F749850011}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{59529155-8DF2-426C-BE82-75F749850011}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E97DC074-7280-4BED-8D56-29C90C2E5045}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E97DC074-7280-4BED-8D56-29C90C2E5045}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E97DC074-7280-4BED-8D56-29C90C2E5045}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E97DC074-7280-4BED-8D56-29C90C2E5045}.Release|Any CPU.Build.0 = Release|Any CPU
+		{39F58152-7005-4D8C-BD0E-79DB7A5AF4F5}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{39F58152-7005-4D8C-BD0E-79DB7A5AF4F5}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{39F58152-7005-4D8C-BD0E-79DB7A5AF4F5}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{39F58152-7005-4D8C-BD0E-79DB7A5AF4F5}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

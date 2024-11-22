@@ -1,0 +1,14 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net8.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="OCI.DotNetSDK.Core" Version="100.0.0"/>
+        <PackageReference Include="OCI.DotNetSDK.Objectstorage" Version="100.0.0"/>
+    </ItemGroup>
+
+</Project>
