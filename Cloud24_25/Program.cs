@@ -1,10 +1,12 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
+using Cloud24_25.Endpoints;
 using Cloud24_25.Infrastructure;
 using Cloud24_25.Infrastructure.Dtos;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
@@ -39,8 +41,7 @@ builder.Services.AddSwaggerGen(options =>
 });
 
 var connectionString = "CONNECTION_STRING"; // TODO: use secret
-
-var serverVersion = new MySqlServerVersion(new Version(9, 0, 2));
+var serverVersion = ServerVersion.AutoDetect(connectionString);
 
 builder.Services.AddDbContext<MyDbContext>(
     dbContextOptions => dbContextOptions
@@ -87,6 +88,11 @@ builder.Services.AddAuthentication()
 
 builder.Services.AddAuthorization();
 
+builder.Services.Configure<KestrelServerOptions>(options =>
+{
+    options.Limits.MaxRequestBodySize = int.MaxValue;
+});
+
 var app = builder.Build();
 
 if (app.Environment.IsDevelopment())
@@ -99,125 +105,11 @@ app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
 
-
-app.MapPost("/register", async (UserRegistrationDto registration,
-        UserManager<IdentityUser> userManager) =>
-    {
-        var user = new IdentityUser { UserName = registration.Username };
-        var result = await userManager.CreateAsync(user, registration.Password);
-
-        return result.Succeeded ? 
-            Results.Ok(new { Message = "User registered successfully" }) : 
-            Results.BadRequest(new { result.Errors });
-    })
-    .WithName("Register")
-    .WithOpenApi();
-
-app.MapPost("/login", async (LoginDto login, UserManager<IdentityUser> userManager,
-        IConfiguration config) =>
-    {
-        var user = await userManager.FindByNameAsync(login.Username);
-        if (user == null || !await userManager.CheckPasswordAsync(user, login.Password))
-            return Results.Unauthorized();
-
-        var claims = new[]
-        {
-            new Claim(JwtRegisteredClaimNames.Sub, user.Id),
-            new Claim(JwtRegisteredClaimNames.UniqueName, user.UserName),
-            new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
-        };
-
-        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(config["Jwt:Key"]));
-        var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
-
-        var token = new JwtSecurityToken(
-            config["Jwt:Issuer"],
-            config["Jwt:Audience"],
-            claims,
-            expires: DateTime.Now.AddDays(1),
-            signingCredentials: creds);
-
-        return Results.Ok(new
-        {
-            token = new JwtSecurityTokenHandler().WriteToken(token)
-        });
-    })
-    .WithName("Login")
-    .WithOpenApi();
-
-app.MapPost("/registerAdmin", async (UserRegistrationDto registration,
-        UserManager<IdentityUser> userManager) =>
-    {
-        if (registration.Password != "admin") return Results.BadRequest(new { Message = "Wrong admin password." });
-        var user = new IdentityUser { UserName = registration.Username };
-        var result = await userManager.CreateAsync(user, registration.Password);
-
-        return result.Succeeded ? 
-            Results.Ok(new { Message = "Admin registered successfully" }) : 
-            Results.BadRequest(new { result.Errors });
-    })
-    .WithName("RegisterAdmin")
-    .WithOpenApi();
-
-app.MapPost("/loginAdmin", async (LoginDto login, UserManager<IdentityUser> userManager,
-        IConfiguration config) =>
-    {
-        if (login.Password != "admin") return Results.BadRequest(new { Message = "Wrong admin password." });
-
-        var user = await userManager.FindByNameAsync(login.Username);
-        if (user == null || !await userManager.CheckPasswordAsync(user, login.Password))
-            return Results.Unauthorized();
-
-        var claims = new[]
-        {
-            new Claim(JwtRegisteredClaimNames.Sub, user.Id),
-            new Claim(JwtRegisteredClaimNames.UniqueName, user.UserName),
-            new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
-            new Claim("aud", config["Jwt:AdminAudience"])
-        };
-
-        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(config["Jwt:Key"]));
-        var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
-
-        var token = new JwtSecurityToken(
-            config["Jwt:Issuer"],
-            config["Jwt:AdminAudience"],
-            claims,
-            expires: DateTime.Now.AddDays(1),
-            signingCredentials: creds);
-
-        return Results.Ok(new
-        {
-            token = new JwtSecurityTokenHandler().WriteToken(token)
-        });
-    })
-    .WithName("LoginAdmin")
-    .WithOpenApi();
+app.MapGroup("user").MapUserEndpoints();
+app.MapGroup("admin").MapAdminEndpoints(builder);
 
 app.MapGet("/helloworld", () => "Hello World!")
     .WithName("HelloWorld")
     .WithOpenApi();
 
-app.MapGet("/authorizedHelloworld", [Authorize]() => "Hello World! You are authorized!")
-    .WithName("AuthorizedHelloWorld")
-    .WithOpenApi();
-
-app.MapGet("/authorizedHelloworldAdmin", [Authorize](HttpContext context) =>
-    {
-        var user = context.User;
-
-        var audienceClaim = user.FindFirstValue("aud");
-        return audienceClaim == builder.Configuration["Jwt:AdminAudience"] ? 
-            Results.Ok("Hello World! You are authorized as admin!") : Results.Forbid();
-    })
-    .WithName("AuthorizedHelloWorldAdmin")
-    .WithOpenApi();
-
-app.MapPost("/handle-file", async (IFormFile myFile) =>
-    {
-        // do something with file
-    })
-    .WithName("HandleFile")
-    .DisableAntiforgery();
-
-app.Run();
+await app.RunAsync();

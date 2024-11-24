@@ -20,6 +20,7 @@
 
     <ItemGroup>
         <ProjectReference Include="..\Cloud24_25.Infrastructure\Cloud24_25.Infrastructure.csproj"/>
+        <ProjectReference Include="..\Cloud24_25.Service\Cloud24_25.Service.csproj" />
     </ItemGroup>
 
 </Project>
