@@ -2,21 +2,22 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using Cloud24_25.Infrastructure.Dtos;
+using Cloud24_25.Infrastructure.Model;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.IdentityModel.Tokens;
 
 namespace Cloud24_25.Endpoints;
 
-public static class Admin
+public static class AdminEndpoints
 {
     public static void MapAdminEndpoints(this RouteGroupBuilder group, WebApplicationBuilder builder)
     {
         group.MapPost("/register", async (UserRegistrationDto registration,
-                UserManager<IdentityUser> userManager) =>
+                UserManager<User> userManager) =>
             {
                 if (registration.Password != "admin") return Results.BadRequest(new { Message = "Wrong admin password." });
-                var user = new IdentityUser { UserName = registration.Username };
+                var user = new User { UserName = registration.Username, Files = [], Logs = []};
                 var result = await userManager.CreateAsync(user, registration.Password);
 
                 return result.Succeeded ? 
@@ -26,7 +27,7 @@ public static class Admin
             .WithName("AdminRegister")
             .WithOpenApi();
 
-        group.MapPost("/login", async (LoginDto login, UserManager<IdentityUser> userManager,
+        group.MapPost("/login", async (LoginDto login, UserManager<User> userManager,
                 IConfiguration config) =>
             {
                 if (login.Password != "admin") return Results.BadRequest(new { Message = "Wrong admin password." });

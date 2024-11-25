@@ -1,15 +1,12 @@
-using System.IdentityModel.Tokens.Jwt;
-using System.Security.Claims;
 using System.Text;
 using Cloud24_25.Endpoints;
 using Cloud24_25.Infrastructure;
-using Cloud24_25.Infrastructure.Dtos;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using User = Cloud24_25.Infrastructure.Model.User;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -40,18 +37,9 @@ builder.Services.AddSwaggerGen(options =>
     });
 });
 
-var connectionString = "CONNECTION_STRING"; // TODO: use secret
-var serverVersion = ServerVersion.AutoDetect(connectionString);
+builder.Services.AddDbContext<MyDbContext>();
 
-builder.Services.AddDbContext<MyDbContext>(
-    dbContextOptions => dbContextOptions
-        .UseMySql(connectionString, serverVersion)
-        .LogTo(Console.WriteLine, LogLevel.Information)
-        .EnableSensitiveDataLogging()
-        .EnableDetailedErrors()
-);
-
-builder.Services.AddIdentityCore<IdentityUser>(options =>
+builder.Services.AddIdentityCore<User>(options =>
     {
         options.Password.RequireDigit = false;
         options.Password.RequiredLength = 3;
@@ -64,7 +52,7 @@ builder.Services.AddIdentityCore<IdentityUser>(options =>
     .AddSignInManager()
     .AddDefaultTokenProviders();
 
-builder.Services.AddScoped<UserManager<IdentityUser>>();
+builder.Services.AddScoped<UserManager<User>>();
 builder.Services.AddScoped<RoleManager<IdentityRole>>();
 
 builder.Services.AddAuthentication()

@@ -1,9 +1,17 @@
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+using Cloud24_25.Infrastructure;
+using Cloud24_25.Infrastructure.Model;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
+using Microsoft.EntityFrameworkCore;
 using Oci.Common;
 using Oci.Common.Auth;
 using Oci.Common.Retry;
 using Oci.ObjectstorageService;
 using Oci.ObjectstorageService.Requests;
 using Oci.ObjectstorageService.Responses;
+using File = Cloud24_25.Infrastructure.Model.File;
 
 namespace Cloud24_25.Service;
 
@@ -11,12 +19,13 @@ public static class FileService
 {
     private const string BucketName = "bucket-20241022-1249";
     private const string NamespaceName = "frgrfeumviow";
+    private const int NumberOfRevisions = 5;
 
     private static readonly ObjectStorageClient Client = new(
         new ConfigFileAuthenticationDetailsProvider("DEFAULT"),
         new ClientConfiguration
         {
-            ClientUserAgent = "DotNet-SDK-Example",
+            ClientUserAgent = "Cloud24_25",
             RetryConfiguration = new RetryConfiguration
             {
                 // maximum number of attempts to retry the same request
@@ -25,25 +34,98 @@ public static class FileService
                 RetryableStatusCodeFamilies = [4, 5]
             }
         });
-    
-    public static async Task UploadFileAsync(string fileName, Stream file)
+
+    public static async Task<IResult> UploadFileAsync(
+        HttpContext context, 
+        IFormFile myFile,
+        MyDbContext db)
     {
+        var endpointUser = context.User;
+        var username = endpointUser.Identity?.Name;
+        if (username == null) return Results.Unauthorized();
+
+        File fileObject;
+        if (!db.Users.Any()) return Results.NotFound();
+        var user = db.Users
+            .Include(x => x.Files)
+            .ThenInclude(x => x.Revisions)
+            .First(x => x.UserName == username);
+        var userFiles = user.Files;
+        
+        if (userFiles.Any(x => x.Name == myFile.FileName))
+        {
+            fileObject = userFiles.First(x => x.Name == myFile.FileName);
+        }
+        else
+        { 
+            fileObject = new File
+            { 
+                Id = Guid.NewGuid(),
+                Name = myFile.FileName, 
+                ContentType = myFile.ContentType,
+                Created = DateTime.UtcNow,
+                Modified = DateTime.UtcNow,
+                Revisions = []
+            };
+        }
+
+        int revisionNumber;
+        if (fileObject.Revisions.Count == 0)
+        {
+            revisionNumber = 1;
+        }
+        else
+        {
+            revisionNumber = int.Parse(fileObject.Revisions.OrderBy(x => x.Created).Last().ObjectName.Split('@').Last()) + 1;
+        }
+        
+        FileRevision fileRevisionObject = new()
+        {
+            Id = Guid.NewGuid(),
+            Created = DateTime.UtcNow,
+            ObjectName = $"{user.UserName}@{fileObject.Name}@{revisionNumber}"
+        };
+        fileObject.Revisions.Add(fileRevisionObject);
+        
+        if (userFiles.All(x => x.Name != myFile.FileName))
+        {
+            await db.Files.AddAsync(fileObject);
+        }
+        else
+        {
+            db.Files.Update(fileObject);
+        }
+        
+        await db.FileRevisions.AddAsync(fileRevisionObject);
+        user.Files.Add(fileObject);
+        db.Users.Update(user);
+
         try
         {
-            var bb = await PutObject(Client, fileName, file);
-            var aa = await GetObject(Client, fileName);
+            await PutObject(fileRevisionObject.ObjectName, myFile.OpenReadStream());
+            if (fileObject.Revisions.Count > NumberOfRevisions)
+            {
+                var toDelete = fileObject.Revisions.OrderBy(x => x.Created).First();
+                fileObject.Revisions.Remove(toDelete);
+                db.FileRevisions.Remove(toDelete);
+                await DeleteObject(toDelete.ObjectName);
+            }
+
+            await db.SaveChangesAsync();
         }
         catch (Exception e)
         {
-            // ignored
+            throw;
         }
         finally
         {
             Client.Dispose();
         }
+        
+        return Results.Ok();
     }
     
-    private static async Task<PutObjectResponse> PutObject(this ObjectStorageClient client, string objectName, Stream file)
+    private static async Task<PutObjectResponse> PutObject(string objectName, Stream file)
     { 
         var putObjectRequest = new PutObjectRequest
         {
@@ -53,18 +135,30 @@ public static class FileService
             PutObjectBody = file
         };
         
-        return await client.PutObject(putObjectRequest);
+        return await Client.PutObject(putObjectRequest);
     }
 
-    private static async Task<GetObjectResponse> GetObject(ObjectStorageClient osClient, string objectName)
+    private static async Task<GetObjectResponse> GetObject(string objectName)
     {
-        var getObjectObjectRequest = new GetObjectRequest()
+        var getObjectRequest = new GetObjectRequest
         {
             BucketName = BucketName,
             NamespaceName = NamespaceName,
             ObjectName = objectName
         };
 
-        return await osClient.GetObject(getObjectObjectRequest);
+        return await Client.GetObject(getObjectRequest);
+    }
+
+    private static async Task<DeleteObjectResponse> DeleteObject(string objectName)
+    {
+        var deleteObjectRequest = new DeleteObjectRequest
+        {
+            BucketName = BucketName,
+            NamespaceName = NamespaceName,
+            ObjectName = objectName
+        };
+
+        return await Client.DeleteObject(deleteObjectRequest);
     }
 }

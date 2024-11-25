@@ -1,7 +1,9 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
+using Cloud24_25.Infrastructure;
 using Cloud24_25.Infrastructure.Dtos;
+using Cloud24_25.Infrastructure.Model;
 using Cloud24_25.Service;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
@@ -9,14 +11,14 @@ using Microsoft.IdentityModel.Tokens;
 
 namespace Cloud24_25.Endpoints;
 
-public static class User
+public static class UserEndpoints
 {
     public static void MapUserEndpoints(this RouteGroupBuilder group)
     {
         group.MapPost("/register", async (UserRegistrationDto registration,
-                UserManager<IdentityUser> userManager) =>
+                UserManager<User> userManager) =>
             {
-                var user = new IdentityUser { UserName = registration.Username };
+                var user = new User { UserName = registration.Username, Files = [], Logs = []};
                 var result = await userManager.CreateAsync(user, registration.Password);
 
                 return result.Succeeded ? 
@@ -26,8 +28,8 @@ public static class User
             .WithName("UserRegister")
             .WithOpenApi();
 
-        group.MapPost("/login", async (LoginDto login, UserManager<IdentityUser> userManager,
-                IConfiguration config) =>
+        group.MapPost("/login", async (LoginDto login, UserManager<User> userManager,
+            IConfiguration config) =>
             {
                 var user = await userManager.FindByNameAsync(login.Username);
                 if (user == null || !await userManager.CheckPasswordAsync(user, login.Password))
@@ -62,21 +64,13 @@ public static class User
             .WithName("UserAuthorizedHelloWorld")
             .WithOpenApi();
         
-        group.MapPost("/upload-file", [Authorize] async (HttpContext context, IFormFile myFile) =>
-            {
-                var user = context.User;
-                var userId = user.FindFirstValue(JwtRegisteredClaimNames.Sub);
-                if (userId == null) return Results.Unauthorized();
-                var userGuid = Guid.Parse(userId);
-                
-                
-                
-                return Results.Ok();
-            })
+        group.MapPost("/upload-file", 
+                async (HttpContext context, IFormFile myFile, MyDbContext db) => 
+                    await FileService.UploadFileAsync(context, myFile, db))
             .WithName("UploadFile")
             .DisableAntiforgery();
         
-        group.MapGet("/get-file/{filename}", [Authorize] (HttpContext context) => 
+        group.MapGet("/get-file/{filename}", (HttpContext context, MyDbContext db) => 
             {
                 // return file
             })
