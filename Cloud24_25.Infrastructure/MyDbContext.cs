@@ -15,7 +15,7 @@ public class MyDbContext(DbContextOptions<MyDbContext> options) : IdentityDbCont
     }
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
-        var connectionString = "CONNECTION_STRING"; // TODO: use secret
+        var connectionString = ""; // TODO: use secret
         var serverVersion = ServerVersion.AutoDetect(connectionString);
         optionsBuilder
             .UseMySql(connectionString, serverVersion)
