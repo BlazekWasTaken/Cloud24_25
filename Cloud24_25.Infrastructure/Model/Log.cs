@@ -15,10 +15,15 @@ public enum LogType
 {
     Register,
     Login,
+    RegisterAttempt,
     LoginAttempt,
     Logout,
     FileUpload,
+    FileDelete,
     FileDownload,
+    FileUploadAttempt,
+    FileDeleteAttempt,
+    FileDownloadAttempt,
     ViewListOfFiles,
     Failure
 }

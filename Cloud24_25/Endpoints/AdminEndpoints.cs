@@ -1,6 +1,7 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
+using Cloud24_25.Infrastructure;
 using Cloud24_25.Infrastructure.Dtos;
 using Cloud24_25.Infrastructure.Model;
 using Microsoft.AspNetCore.Authorization;
@@ -65,18 +66,21 @@ public static class AdminEndpoints
         group.MapGet("/authorized-hello-world", [Authorize](HttpContext context) =>
             {
                 var user = context.User;
-
                 var audienceClaim = user.FindFirstValue("aud");
                 return audienceClaim == builder.Configuration["Jwt:AdminAudience"] ? 
                     Results.Ok("Hello World! You are authorized as admin!") : Results.Forbid();
             })
             .WithName("AdminAuthorizedHelloWorld")
             .WithOpenApi();
-        
-        group.MapGet("/get-file/{username}&{filename}", [Authorize] () => 
-            {
-                // return file
-            })
-            .WithName("AdminGetFile");
+
+        group.MapGet("/get-logs", (HttpContext context, MyDbContext db) =>
+        {
+            var user = context.User;
+            var audienceClaim = user.FindFirstValue("aud");
+            if (builder.Configuration["Jwt:AdminAudience"].IsNullOrEmpty()) return Results.Unauthorized();
+
+            var logs = db.Logs.ToList();
+            return Results.Ok(logs);
+        });
     }
 }
