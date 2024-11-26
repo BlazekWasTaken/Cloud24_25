@@ -7,7 +7,6 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="Microsoft.AspNetCore.Authorization" Version="9.0.0" />
         <PackageReference Include="OCI.DotNetSDK.Core" Version="100.0.0"/>
         <PackageReference Include="OCI.DotNetSDK.Objectstorage" Version="100.0.0"/>
     </ItemGroup>

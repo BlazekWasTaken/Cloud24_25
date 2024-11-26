@@ -45,7 +45,7 @@ public static class FileService
         if (username == null) return Results.Unauthorized();
 
         File fileObject;
-        if (!db.Users.Any()) return Results.NotFound();
+        if (!db.Users.Any() || !db.Users.Any(x => x.UserName == username)) return Results.NotFound();
         var user = db.Users
             .Include(x => x.Files)
             .ThenInclude(x => x.Revisions)
@@ -117,12 +117,93 @@ public static class FileService
         {
             throw;
         }
-        finally
-        {
-            Client.Dispose();
-        }
         
         return Results.Ok();
+    }
+
+    public static IResult ListFiles(
+        HttpContext context, 
+        MyDbContext db)
+    {
+        var endpointUser = context.User;
+        var username = endpointUser.Identity?.Name;
+        if (username == null) return Results.Unauthorized();
+        if (!db.Users.Any() || !db.Users.Any(x => x.UserName == username)) return Results.NotFound();
+        
+        var user = db.Users
+            .Include(x => x.Files)
+            .ThenInclude(x => x.Revisions)
+            .First(x => x.UserName == username);
+        var userFiles = user.Files;
+        
+        return Results.Ok(userFiles);
+    }
+
+    public static async Task<IResult> DeleteFile(
+        HttpContext context,
+        MyDbContext db,
+        Guid id) 
+    {
+        var endpointUser = context.User;
+        var username = endpointUser.Identity?.Name;
+        if (username == null) return Results.Unauthorized();
+        if (!db.Users.Any() || !db.Users.Any(x => x.UserName == username)) return Results.NotFound();
+        
+        var user = db.Users
+            .Include(x => x.Files)
+            .ThenInclude(x => x.Revisions)
+            .First(x => x.UserName == username);
+        var userFiles = user.Files;
+
+        var fileToDelete = userFiles.First(x => x.Id == id);
+        var revisionsToDelete = fileToDelete.Revisions;
+
+        try
+        {
+            foreach (var revision in revisionsToDelete)
+            {
+                await DeleteObject(revision.ObjectName);
+                db.FileRevisions.Remove(revision);
+            }
+            
+            db.Files.Remove(fileToDelete);
+            user.Files.Remove(fileToDelete);
+            db.Users.Update(user);
+            
+            await db.SaveChangesAsync();
+        }
+        catch (Exception e)
+        {
+            await db.SaveChangesAsync();
+            throw;
+        }
+
+        return Results.Ok();
+    }
+    
+    public static async Task<IResult> DownloadFile(
+        HttpContext context,
+        MyDbContext db,
+        Guid id)
+    {
+        var endpointUser = context.User;
+        var username = endpointUser.Identity?.Name;
+        if (username == null) return Results.Unauthorized();
+        if (!db.Users.Any() || !db.Users.Any(x => x.UserName == username)) return Results.NotFound();
+        
+        var user = db.Users
+            .Include(x => x.Files)
+            .ThenInclude(x => x.Revisions)
+            .First(x => x.UserName == username);
+        var userFiles = user.Files;
+
+        var fileToDownload = userFiles.First(x => x.Id == id);
+        var revisionToDownload = fileToDownload.Revisions.OrderBy(x => x.Created).Last();
+        
+        var objectStream = await GetObject(revisionToDownload.ObjectName);
+        if (objectStream.InputStream is null) return Results.NotFound();
+        
+        return Results.File(objectStream.InputStream, fileToDownload.ContentType, fileToDownload.Name);
     }
     
     private static async Task<PutObjectResponse> PutObject(string objectName, Stream file)

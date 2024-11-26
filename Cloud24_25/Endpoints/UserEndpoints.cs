@@ -63,17 +63,25 @@ public static class UserEndpoints
         group.MapGet("/authorized-hello-world", [Authorize] () => "Hello World! You are authorized!")
             .WithName("UserAuthorizedHelloWorld")
             .WithOpenApi();
-        
-        group.MapPost("/upload-file", 
-                async (HttpContext context, IFormFile myFile, MyDbContext db) => 
+
+        group.MapPost("/upload-file",
+                async (HttpContext context, IFormFile myFile, MyDbContext db) =>
                     await FileService.UploadFileAsync(context, myFile, db))
             .WithName("UploadFile")
             .DisableAntiforgery();
         
-        group.MapGet("/get-file/{filename}", (HttpContext context, MyDbContext db) => 
-            {
-                // return file
-            })
-            .WithName("UserGetFile");
+        group.MapGet("/get-files", (HttpContext context, MyDbContext db) => FileService.ListFiles(context, db))
+            .WithName("UserGetFiles")
+            .WithOpenApi();
+        
+        group.MapDelete("/delete-file/{fileId}", async (HttpContext context, MyDbContext db, Guid fileId) => 
+            await FileService.DeleteFile(context, db, fileId))
+            .WithName("UserDeleteFile")
+            .WithOpenApi();
+
+        group.MapGet("/get-file/{fileId}", async (HttpContext context, MyDbContext db, Guid fileId) =>
+                await FileService.DownloadFile(context, db, fileId))
+            .WithName("UserGetFile")
+            .WithOpenApi();
     }
 }
