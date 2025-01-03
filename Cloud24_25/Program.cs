@@ -1,4 +1,3 @@
-using System.Text;
 using Cloud24_25.Endpoints;
 using Cloud24_25.Infrastructure;
 using Microsoft.AspNetCore.Identity;
@@ -6,6 +5,7 @@ using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using System.Text;
 using User = Cloud24_25.Infrastructure.Model.User;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -100,4 +100,4 @@ app.MapGet("/helloworld", () => "Hello World!")
     .WithName("HelloWorld")
     .WithOpenApi();
 
-await app.RunAsync();
+app.Run();
