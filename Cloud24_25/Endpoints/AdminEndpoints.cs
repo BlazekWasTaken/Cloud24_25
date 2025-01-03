@@ -32,8 +32,18 @@ public static class AdminEndpoints
             }
             return Results.BadRequest(new { result.Errors });
         })
-        .WithName("AdminRegister")
-        .WithOpenApi();
+            .WithName("AdminRegister")
+            .WithTags("Admin")
+            .Produces(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status400BadRequest)
+            .WithOpenApi(operation =>
+            {
+                operation.Summary = "Register a New Admin";
+                operation.Description = "Creates a new admin user with elevated privileges.";
+                operation.Responses["200"].Description = "Admin registered successfully.";
+                operation.Responses["400"].Description = "Registration failed.";
+                return operation;
+            });
 
         group.MapPost("/login", async (LoginDto login, UserManager<User> userManager, IConfiguration config) =>
         {
@@ -65,20 +75,50 @@ public static class AdminEndpoints
                 token = new JwtSecurityTokenHandler().WriteToken(token)
             });
         })
-        .WithName("AdminLogin")
-        .WithOpenApi();
+            .WithName("AdminLogin")
+            .WithTags("Admin")
+            .Produces(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status401Unauthorized)
+            .WithOpenApi(operation =>
+            {
+                operation.Summary = "Admin Login";
+                operation.Description = "Authenticate as an admin user and receive a JWT token.";
+                operation.Responses["200"].Description = "Login successful.";
+                operation.Responses["401"].Description = "Invalid credentials.";
+                return operation;
+            });
 
         group.MapGet("/authorized-hello-world", [Authorize(Roles = "Admin")] () =>
             "Hello World! You are authorized as admin!")
             .WithName("AdminAuthorizedHelloWorld")
-            .WithOpenApi();
+            .WithTags("Authorization")
+            .Produces(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status401Unauthorized)
+            .WithOpenApi(operation =>
+            {
+                operation.Summary = "Authorized Hello World for Admins";
+                operation.Description = "Returns a greeting message for authorized admins.";
+                operation.Responses["200"].Description = "Successfully retrieved greeting message.";
+                operation.Responses["401"].Description = "Unauthorized access.";
+                return operation;
+            });
 
         group.MapGet("/get-logs", [Authorize(Roles = "Admin")] (MyDbContext db) =>
         {
             var logs = db.Logs.ToList();
             return Results.Ok(logs);
         })
-        .WithName("AdminGetLogs")
-        .WithOpenApi();
+            .WithName("AdminGetLogs")
+            .WithTags("Admin")
+            .Produces(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status401Unauthorized)
+            .WithOpenApi(operation =>
+            {
+                operation.Summary = "Get All System Logs";
+                operation.Description = "Retrieves all system logs. Requires Admin role.";
+                operation.Responses["200"].Description = "Successfully retrieved system logs.";
+                operation.Responses["401"].Description = "Unauthorized access.";
+                return operation;
+            });
     }
 }

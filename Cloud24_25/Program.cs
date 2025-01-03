@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using System.Reflection;
 using System.Text;
 using User = Cloud24_25.Infrastructure.Model.User;
 
@@ -14,12 +15,25 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
+    options.SwaggerDoc("v1", new OpenApiInfo
+    {
+        Title = "Cloud24_25 API",
+        Version = "v1",
+        Description = "API for file management and user authentication",
+        Contact = new OpenApiContact
+        {
+            Name = "API Support",
+            Email = "support@example.com"
+        }
+    });
     options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
         Name = "Authorization",
-        In = ParameterLocation.Header,
         Type = SecuritySchemeType.Http,
-        Scheme = "Bearer"
+        Scheme = "Bearer",
+        BearerFormat = "JWT",
+        In = ParameterLocation.Header,
+        Description = "JWT Authorization header using the Bearer scheme."
     });
     options.AddSecurityRequirement(new OpenApiSecurityRequirement
     {
@@ -109,7 +123,13 @@ app.MapGroup("admin").MapAdminEndpoints();
 
 // Test route
 app.MapGet("/helloworld", () => "Hello World!")
-   .WithName("HelloWorld")
-   .WithOpenApi();
+    .WithName("HelloWorld")
+    .WithTags("Authorization")
+    .WithOpenApi(operation =>
+    {
+        operation.Summary = "Unauthorized Hello World for Everyone";
+        operation.Description = "Returns a greeting message for authorized and unauthorized users.";
+        return operation;
+    });
 
 app.Run();
