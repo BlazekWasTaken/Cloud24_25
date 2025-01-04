@@ -13,6 +13,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Swagger
 builder.Services.AddEndpointsApiExplorer();
+// builder.Services.AddOpenApi();
 builder.Services.AddSwaggerGen(options =>
 {
     options.SwaggerDoc("v1", new OpenApiInfo
@@ -131,5 +132,7 @@ app.MapGet("/helloworld", () => "Hello World!")
         operation.Description = "Returns a greeting message for authorized and unauthorized users.";
         return operation;
     });
+
+// app.MapOpenApi();
 
 app.Run();

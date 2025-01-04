@@ -1,6 +1,5 @@
-@Cloud24_25_HostAddress = http://localhost:5281
+@Cloud24_25_HostAddress = https://localhost:7039
 
 GET {{Cloud24_25_HostAddress}}/helloworld
-Accept: application/json
 
 ###
