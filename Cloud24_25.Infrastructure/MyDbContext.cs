@@ -1,5 +1,4 @@
 using Cloud24_25.Infrastructure.Model;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -15,7 +14,7 @@ public class MyDbContext(DbContextOptions<MyDbContext> options) : IdentityDbCont
     }
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
-        var connectionString = ""; // TODO: use secret
+        var connectionString = "Server=10.0.0.60;Database=test_db;Uid=cloud_admin;Pwd=Cloud_admin1;"; // TODO: use secret
         var serverVersion = ServerVersion.AutoDetect(connectionString);
         optionsBuilder
             .UseMySql(connectionString, serverVersion)

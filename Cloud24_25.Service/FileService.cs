@@ -1,8 +1,5 @@
-using System.IdentityModel.Tokens.Jwt;
-using System.Security.Claims;
 using Cloud24_25.Infrastructure;
 using Cloud24_25.Infrastructure.Model;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Oci.Common;
@@ -44,14 +41,7 @@ public static class FileService
         var username = endpointUser.Identity?.Name;
         if (username == null)
         {
-            var log = new Log
-            {
-                Id = Guid.NewGuid(),
-                Date = DateTime.UtcNow,
-                LogType = LogType.LoginAttempt,
-                Message = "There was an attempt to upload a file, but user's credentials are incorrect."
-            };
-            db.Logs.Add(log);
+            await LogService.Log("There was an attempt to upload a file, but user's credentials are incorrect.", db);
             await db.SaveChangesAsync();
             return Results.Unauthorized();
         }
@@ -59,14 +49,7 @@ public static class FileService
         File fileObject;
         if (!db.Users.Any() || !db.Users.Any(x => x.UserName == username))
         {
-            var log = new Log
-            {
-                Id = Guid.NewGuid(),
-                Date = DateTime.UtcNow,
-                LogType = LogType.LoginAttempt,
-                Message = $"User {username} was not found."
-            };
-            db.Logs.Add(log);
+            await LogService.Log($"User {username} was not found.", db);
             await db.SaveChangesAsync();
             return Results.NotFound();
         }
@@ -139,32 +122,16 @@ public static class FileService
         catch (Exception e)
         {
             // TODO: test if this doesn't save bad data when errored
-            var log = new Log
-            {
-                Id = Guid.NewGuid(),
-                Date = DateTime.UtcNow,
-                LogType = LogType.FileUploadAttempt,
-                Message = $"{username}'s file upload attempt failed. Message: {e.Message}"
-            };
-            db.Logs.Add(log);
-            await db.SaveChangesAsync();
+            await LogService.Log($"{username}'s file upload attempt failed. Message: {e.Message}", db);
             throw;
         }
         
-        var log2 = new Log
-        {
-            Id = Guid.NewGuid(),
-            Date = DateTime.UtcNow,
-            LogType = LogType.FileUploadAttempt,
-            Message = $"{username} uploaded a file called {myFile.FileName}"
-        };
-        db.Logs.Add(log2);
-        await db.SaveChangesAsync();
+        await LogService.Log($"{username} uploaded a file called {myFile.FileName}", db);
         
         return Results.Ok();
     }
 
-    public static IResult ListFiles(
+    public static async Task<IResult> ListFiles(
         HttpContext context, 
         MyDbContext db)
     {
@@ -172,28 +139,12 @@ public static class FileService
         var username = endpointUser.Identity?.Name;
         if (username == null)
         {
-            var log = new Log
-            {
-                Id = Guid.NewGuid(),
-                Date = DateTime.UtcNow,
-                LogType = LogType.LoginAttempt,
-                Message = "There was an attempt to list files, but user's credentials are incorrect."
-            };
-            db.Logs.Add(log);
-            db.SaveChanges(); // TODO: make function async
+            await LogService.Log("There was an attempt to list files, but user's credentials are incorrect.", db);
             return Results.Unauthorized();
         }
         if (!db.Users.Any() || !db.Users.Any(x => x.UserName == username))
         {
-            var log = new Log
-            {
-                Id = Guid.NewGuid(),
-                Date = DateTime.UtcNow,
-                LogType = LogType.LoginAttempt,
-                Message = $"User {username} was not found."
-            };
-            db.Logs.Add(log);
-            db.SaveChanges();
+            await LogService.Log($"User {username} was not found.", db);
             return Results.NotFound();
         }
         
@@ -203,16 +154,7 @@ public static class FileService
             .First(x => x.UserName == username);
         var userFiles = user.Files;
         
-        var log2 = new Log
-        {
-            Id = Guid.NewGuid(),
-            Date = DateTime.UtcNow,
-            LogType = LogType.ViewListOfFiles,
-            Message = $"User {username} listed {userFiles.Count} files."
-        };
-        db.Logs.Add(log2);
-        db.SaveChanges();
-        
+        await LogService.Log($"User {username} listed {userFiles.Count} files.", db);
         return Results.Ok(userFiles);
     }
 
@@ -225,28 +167,12 @@ public static class FileService
         var username = endpointUser.Identity?.Name;
         if (username == null)
         {
-            var log = new Log
-            {
-                Id = Guid.NewGuid(),
-                Date = DateTime.UtcNow,
-                LogType = LogType.LoginAttempt,
-                Message = "There was an attempt to delete a file, but user's credentials are incorrect."
-            };
-            db.Logs.Add(log);
-            await db.SaveChangesAsync();
+            await LogService.Log("There was an attempt to delete a file, but user's credentials are incorrect.", db);
             return Results.Unauthorized();
         }
         if (!db.Users.Any() || !db.Users.Any(x => x.UserName == username))
         {
-            var log = new Log
-            {
-                Id = Guid.NewGuid(),
-                Date = DateTime.UtcNow,
-                LogType = LogType.LoginAttempt,
-                Message = $"User {username} was not found."
-            };
-            db.Logs.Add(log);
-            await db.SaveChangesAsync();
+            await LogService.Log($"User {username} was not found.", db);
             return Results.NotFound();
         }
         
@@ -275,27 +201,11 @@ public static class FileService
         }
         catch (Exception e)
         {
-            var log = new Log
-            {
-                Id = Guid.NewGuid(),
-                Date = DateTime.UtcNow,
-                LogType = LogType.FileDeleteAttempt,
-                Message = $"{username}'s file delete attempt failed. Message: {e.Message}"
-            };
-            db.Logs.Add(log);
-            await db.SaveChangesAsync();
+            await LogService.Log($"{username}'s file delete attempt failed. Message: {e.Message}", db);
             throw;
         }
 
-        var log2 = new Log
-        {
-            Id = Guid.NewGuid(),
-            Date = DateTime.UtcNow,
-            LogType = LogType.FileDeleteAttempt,
-            Message = $"{username} deleted a file called {fileToDelete.Name}"
-        };
-        db.Logs.Add(log2);
-        await db.SaveChangesAsync();
+        await LogService.Log($"{username} deleted a file called {fileToDelete.Name}", db);
         return Results.Ok();
     }
     
@@ -308,29 +218,13 @@ public static class FileService
         var username = endpointUser.Identity?.Name;
         if (username == null)
         {
-            var log = new Log
-            {
-                Id = Guid.NewGuid(),
-                Date = DateTime.UtcNow,
-                LogType = LogType.LoginAttempt,
-                Message = "There was an attempt to delete a file, but user's credentials are incorrect."
-            };
-            db.Logs.Add(log);
-            await db.SaveChangesAsync();
+            await LogService.Log("There was an attempt to delete a file, but user's credentials are incorrect.", db);
             return Results.Unauthorized();
         }
 
         if (!db.Users.Any() || !db.Users.Any(x => x.UserName == username))
         {
-            var log = new Log
-            {
-                Id = Guid.NewGuid(),
-                Date = DateTime.UtcNow,
-                LogType = LogType.LoginAttempt,
-                Message = $"User {username} was not found."
-            };
-            db.Logs.Add(log);
-            await db.SaveChangesAsync();
+            await LogService.Log($"User {username} was not found.", db);
             return Results.NotFound();
         }
         
@@ -346,32 +240,16 @@ public static class FileService
         var objectStream = await GetObject(revisionToDownload.ObjectName);
         if (objectStream.InputStream is null)
         {
-            var log = new Log
-            {
-                Id = Guid.NewGuid(),
-                Date = DateTime.UtcNow,
-                LogType = LogType.FileDownloadAttempt,
-                Message = $"{username} attempted to download a file, but the file was not found."
-            };
-            db.Logs.Add(log);
-            await db.SaveChangesAsync();
+            await LogService.Log($"{username} attempted to download a file, but the file was not found.", db);
             return Results.NotFound();
         }
         
-        var log2 = new Log
-        {
-            Id = Guid.NewGuid(),
-            Date = DateTime.UtcNow,
-            LogType = LogType.FileDownloadAttempt,
-            Message = $"{username} downloaded a file called {fileToDownload.Name}."
-        };
-        db.Logs.Add(log2);
-        await db.SaveChangesAsync();
+        await LogService.Log($"{username} downloaded a file called {fileToDownload.Name}.", db);
         
         return Results.File(objectStream.InputStream, fileToDownload.ContentType, fileToDownload.Name);
     }
     
-    private static async Task<PutObjectResponse> PutObject(string objectName, Stream file)
+    private static async Task PutObject(string objectName, Stream file)
     { 
         var putObjectRequest = new PutObjectRequest
         {
@@ -380,8 +258,8 @@ public static class FileService
             ObjectName = objectName,
             PutObjectBody = file
         };
-        
-        return await Client.PutObject(putObjectRequest);
+
+        await Client.PutObject(putObjectRequest);
     }
 
     private static async Task<GetObjectResponse> GetObject(string objectName)
@@ -396,7 +274,7 @@ public static class FileService
         return await Client.GetObject(getObjectRequest);
     }
 
-    private static async Task<DeleteObjectResponse> DeleteObject(string objectName)
+    private static async Task DeleteObject(string objectName)
     {
         var deleteObjectRequest = new DeleteObjectRequest
         {
@@ -405,6 +283,6 @@ public static class FileService
             ObjectName = objectName
         };
 
-        return await Client.DeleteObject(deleteObjectRequest);
+        await Client.DeleteObject(deleteObjectRequest);
     }
 }

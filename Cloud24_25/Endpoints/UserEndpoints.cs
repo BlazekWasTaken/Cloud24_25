@@ -27,28 +27,12 @@ public static class UserEndpoints
                 if (result.Succeeded)
                 {
                     // TODO: get user and add the log to their logs
-                    var log = new Log()
-                    {
-                        Id = Guid.NewGuid(),
-                        Date = DateTime.UtcNow,
-                        LogType = LogType.Register,
-                        Message = $"User {registration.Username} successfully registered"
-                    };
-                    db.Logs.Add(log);
-                    await db.SaveChangesAsync();
+                    await LogService.Log($"User {registration.Username} successfully registered", db);
                     return Results.Ok(new { Message = "User registered successfully" });
                 }
                 else
                 {
-                    var log = new Log()
-                    {
-                        Id = Guid.NewGuid(),
-                        Date = DateTime.UtcNow,
-                        LogType = LogType.RegisterAttempt,
-                        Message = $"User {registration.Username}'s attempt to register failed"
-                    };
-                    db.Logs.Add(log);
-                    await db.SaveChangesAsync();
+                    await LogService.Log($"User {registration.Username}'s attempt to register failed", db);
                     return Results.BadRequest(new { result.Errors });
                 }
             })
@@ -71,20 +55,13 @@ public static class UserEndpoints
                 var user = await userManager.FindByNameAsync(login.Username);
                 if (user == null || !await userManager.CheckPasswordAsync(user, login.Password))
                 {
-                    var log = new Log
-                    {
-                        Id = Guid.NewGuid(),
-                        Date = DateTime.UtcNow,
-                        LogType = LogType.LoginAttempt,
-                        Message = $"There was an attempt to login as {login.Username}, but password is incorrect."
-                    };
-                    db.Logs.Add(log);
-                    await db.SaveChangesAsync();
+                    await LogService.Log($"There was an attempt to login as {login.Username}, but password was incorrect.", db);
                     return Results.Unauthorized();
                 }
 
                 var claims = new[]
                 {
+            
                     new Claim(JwtRegisteredClaimNames.Sub, user.Id),
                     new Claim(JwtRegisteredClaimNames.UniqueName, user.UserName),
                     new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
@@ -101,15 +78,7 @@ public static class UserEndpoints
                     signingCredentials: creds);
 
                 // TODO: get user and add the log to their logs
-                var log2 = new Log
-                {
-                    Id = Guid.NewGuid(),
-                    Date = DateTime.UtcNow,
-                    LogType = LogType.Login,
-                    Message = $"User {login.Username} logged in."
-                };
-                db.Logs.Add(log2);
-                await db.SaveChangesAsync();
+                await LogService.Log($"User {login.Username} logged in.", db);
                 return Results.Ok(new
                 {
                     token = new JwtSecurityTokenHandler().WriteToken(token)
