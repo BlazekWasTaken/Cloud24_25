@@ -23,18 +23,15 @@ public static class AdminEndpoints
             var user = new User { UserName = registration.Username, Files = [], Logs = [] };
             var result = await userManager.CreateAsync(user, registration.Password);
 
-            if (result.Succeeded)
+            if (!result.Succeeded) return Results.BadRequest(new { result.Errors });
+            if (!await roleManager.RoleExistsAsync("Admin"))
             {
-                if (!await roleManager.RoleExistsAsync("Admin"))
-                {
-                    await roleManager.CreateAsync(new IdentityRole("Admin"));
-                }
-                await userManager.AddToRoleAsync(user, "Admin");
-                await LogService.Log(LogType.Register, $"Admin {registration.Username} successfully registered", db,
-                    user);
-                return Results.Ok(new { Message = "Admin registered successfully" });
+                await roleManager.CreateAsync(new IdentityRole("Admin"));
             }
-            return Results.BadRequest(new { result.Errors });
+            await userManager.AddToRoleAsync(user, "Admin");
+            await LogService.Log(LogType.Register, $"Admin {registration.Username} successfully registered", db,
+                user);
+            return Results.Ok(new { Message = "Admin registered successfully" });
         })
             .WithName("AdminRegister")
             .WithTags("Admin")
@@ -115,7 +112,7 @@ public static class AdminEndpoints
 
         group.MapGet("/get-logs", [Authorize(Roles = "Admin")] (MyDbContext db) =>
         {
-            var logs = db.Logs.ToList();
+            var logs = db.Logs.ToList().OrderByDescending(x => x.Date);
             return Results.Ok(logs);
         })
             .WithName("AdminGetLogs")

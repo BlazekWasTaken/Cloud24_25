@@ -1,6 +1,9 @@
+using System.IO.Compression;
+using System.Security.Cryptography;
 using Cloud24_25.Infrastructure;
 using Cloud24_25.Infrastructure.Model;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.EntityFrameworkCore;
 using Oci.Common;
 using Oci.Common.Auth;
@@ -33,8 +36,9 @@ public static class FileService
         });
 
     public static async Task<IResult> UploadFileAsync(
-        HttpContext context, 
+        HttpContext context,
         IFormFile myFile,
+        List<string?> hashes,
         MyDbContext db)
     {
         var endpointUser = context.User;
@@ -42,91 +46,38 @@ public static class FileService
         if (username == null)
         {
             await LogService.Log(LogType.FileUploadAttempt, "There was an attempt to upload a file, but user's credentials are incorrect.", db, null);
-            await db.SaveChangesAsync();
             return Results.Unauthorized();
         }
-
-        File fileObject;
+        
         if (!db.Users.Any() || !db.Users.Any(x => x.UserName == username))
         {
             await LogService.Log(LogType.FileUploadAttempt, $"User {username} was not found.", db, null);
-            await db.SaveChangesAsync();
             return Results.NotFound();
         }
         var user = db.Users
             .Include(x => x.Files)
             .ThenInclude(x => x.Revisions)
             .First(x => x.UserName == username);
-        var userFiles = user.Files;
         
-        if (userFiles.Any(x => x.Name == myFile.FileName))
+        if (myFile.ContentType != "application/zip")
         {
-            fileObject = userFiles.First(x => x.Name == myFile.FileName);
-        }
-        else
-        { 
-            fileObject = new File
-            { 
-                Id = Guid.NewGuid(),
-                Name = myFile.FileName, 
-                ContentType = myFile.ContentType,
-                Created = DateTime.UtcNow,
-                Modified = DateTime.UtcNow,
-                Revisions = []
-            };
-        }
-
-        int revisionNumber;
-        if (fileObject.Revisions.Count == 0)
-        {
-            revisionNumber = 1;
+            if (hashes.Count != 1) return Results.BadRequest();
+            if (GetHash(myFile.OpenReadStream()) != hashes[0]) return Results.BadRequest();
+            await SaveFile(user, myFile.OpenReadStream(), myFile.FileName, myFile.ContentType, db);
         }
         else
         {
-            revisionNumber = int.Parse(fileObject.Revisions.OrderBy(x => x.Created).Last().ObjectName.Split('@').Last()) + 1;
-        }
-        
-        FileRevision fileRevisionObject = new()
-        {
-            Id = Guid.NewGuid(),
-            Created = DateTime.UtcNow,
-            ObjectName = $"{user.UserName}@{fileObject.Name}@{revisionNumber}"
-        };
-        fileObject.Revisions.Add(fileRevisionObject);
-        
-        if (userFiles.All(x => x.Name != myFile.FileName))
-        {
-            await db.Files.AddAsync(fileObject);
-        }
-        else
-        {
-            db.Files.Update(fileObject);
-        }
-        
-        await db.FileRevisions.AddAsync(fileRevisionObject);
-        user.Files.Add(fileObject);
-        db.Users.Update(user);
-
-        try
-        {
-            await PutObject(fileRevisionObject.ObjectName, myFile.OpenReadStream());
-            if (fileObject.Revisions.Count > NumberOfRevisions)
+            ZipArchive archive = new(myFile.OpenReadStream());
+            
+            if (!IsZipArchiveCorrect(archive, hashes)) return Results.BadRequest();
+            
+            foreach (var entry in archive.Entries)
             {
-                var toDelete = fileObject.Revisions.OrderBy(x => x.Created).First();
-                fileObject.Revisions.Remove(toDelete);
-                db.FileRevisions.Remove(toDelete);
-                await DeleteObject(toDelete.ObjectName);
+                new FileExtensionContentTypeProvider().TryGetContentType(entry.Name, out var contentType);
+                contentType ??= "application/octet-stream";
+                await SaveFile(user, entry.Open(), entry.Name, contentType, db);
             }
-            await db.SaveChangesAsync();
         }
-        catch (Exception e)
-        {
-            // TODO: test if this doesn't save bad data when errored
-            await LogService.Log(LogType.FileUploadAttempt, $"{username}'s file upload attempt failed. Message: {e.Message}", db, user);
-            throw;
-        }
-        
-        await LogService.Log(LogType.FileUpload, $"{username} uploaded a file called {myFile.FileName}", db, user);
         
         return Results.Ok();
     }
@@ -249,6 +200,137 @@ public static class FileService
         return Results.File(objectStream.InputStream, fileToDownload.ContentType, fileToDownload.Name);
     }
     
+    public static async Task<IResult> DownloadMultipleFiles(
+        HttpContext context,
+        MyDbContext db,
+        List<Guid> ids)
+    {
+        var endpointUser = context.User;
+        var username = endpointUser.Identity?.Name;
+        if (username == null)
+        {
+            await LogService.Log(LogType.FileDownloadAttempt, "There was an attempt to delete a file, but user's credentials are incorrect.", db, null);
+            return Results.Unauthorized();
+        }
+
+        if (!db.Users.Any() || !db.Users.Any(x => x.UserName == username))
+        {
+            await LogService.Log(LogType.FileDownloadAttempt, $"User {username} was not found.", db, null);
+            return Results.NotFound();
+        }
+        
+        var user = db.Users
+            .Include(x => x.Files)
+            .ThenInclude(x => x.Revisions)
+            .First(x => x.UserName == username);
+        var userFiles = user.Files;
+
+        if (!ids.All(x => userFiles.Select(y => y.Id).Contains(x)))
+        {
+            await LogService.Log(LogType.FileDownloadAttempt,$"{username} attempted to download a file, but the file was not found.", db, user);
+            return Results.NotFound();
+        }
+        var filesToDownload = userFiles.Where(x => ids.Contains(x.Id));
+        var toDownload = filesToDownload.ToList();
+        var revisionsToDownload = toDownload.Select(x => x.Revisions.OrderBy(y => y.Created).Last());
+
+        var objects = new List<(GetObjectResponse response, string name)>();
+        
+        foreach (var revision in revisionsToDownload)
+        {
+            var objectStream = await GetObject(revision.ObjectName);
+            if (objectStream.InputStream is null)
+            {
+                await LogService.Log(LogType.FileDownloadAttempt, $"{username} attempted to download a file, but the file was not found.", db, user);
+                return Results.NotFound();
+            }
+
+            var name = toDownload.First(x => x.Revisions.Contains(revision)).Name;
+            
+            objects.Add((objectStream, name));
+            
+            await LogService.Log(LogType.FileDownload, $"{username} downloaded a file called {name}.", db, user);
+        }
+        
+        var archive = CreateZipArchive(objects);
+        
+        return Results.File(archive, "application/zip", $"download_{username}_{DateTime.UtcNow:yyyy-MM-dd_HH-mm-ss}.zip");
+    }
+
+    private static async Task SaveFile(User user, Stream fileStream, string fileName, string fileContentType, MyDbContext db)
+    {
+        var userFiles = user.Files;
+        
+        File fileObject;
+        if (userFiles.Any(x => x.Name == fileName))
+        {
+            fileObject = userFiles.First(x => x.Name == fileName);
+        }
+        else
+        { 
+            fileObject = new File
+            { 
+                Id = Guid.NewGuid(),
+                Name = fileName, 
+                ContentType = fileContentType,
+                Created = DateTime.UtcNow,
+                Modified = DateTime.UtcNow,
+                Revisions = []
+            };
+        }
+
+        int revisionNumber;
+        if (fileObject.Revisions.Count == 0)
+        {
+            revisionNumber = 1;
+        }
+        else
+        {
+            revisionNumber = int.Parse(fileObject.Revisions.OrderBy(x => x.Created).Last().ObjectName.Split('@').Last()) + 1;
+        }
+        
+        FileRevision fileRevisionObject = new()
+        {
+            Id = Guid.NewGuid(),
+            Created = DateTime.UtcNow,
+            ObjectName = $"{user.UserName}@{fileObject.Name}@{revisionNumber}"
+        };
+        fileObject.Revisions.Add(fileRevisionObject);
+        
+        if (userFiles.All(x => x.Name != fileName))
+        {
+            await db.Files.AddAsync(fileObject);
+        }
+        else
+        {
+            db.Files.Update(fileObject);
+        }
+        
+        await db.FileRevisions.AddAsync(fileRevisionObject);
+        user.Files.Add(fileObject);
+        db.Users.Update(user);
+
+        try
+        {
+            await PutObject(fileRevisionObject.ObjectName, fileStream);
+            if (fileObject.Revisions.Count > NumberOfRevisions)
+            {
+                var toDelete = fileObject.Revisions.OrderBy(x => x.Created).First();
+                fileObject.Revisions.Remove(toDelete);
+                db.FileRevisions.Remove(toDelete);
+                await DeleteObject(toDelete.ObjectName);
+            }
+            await db.SaveChangesAsync();
+        }
+        catch (Exception e)
+        {
+            await LogService.Log(LogType.FileUploadAttempt, $"{user.UserName}'s file upload attempt failed. Message: {e.Message}", db, user);
+            throw;
+        }
+        
+        await LogService.Log(LogType.FileUpload, $"{user.UserName} uploaded a file called {fileName}", db, user);
+    }
+    
     private static async Task PutObject(string objectName, Stream file)
     { 
         var putObjectRequest = new PutObjectRequest
@@ -284,5 +366,49 @@ public static class FileService
         };
 
         await Client.DeleteObject(deleteObjectRequest);
+    }
+    
+    public static string GetHash(Stream stream)
+    {
+        using var sha512 = SHA512.Create();
+        var hash = sha512.ComputeHash(stream);
+        return Convert.ToBase64String(hash);
+    }
+    
+    private static bool IsZipArchiveCorrect(ZipArchive archive, List<string?> hashes)
+    {
+        if (hashes.Any(x => x is null)) return false;
+        if (archive.Entries.Count != hashes.Count) return false;
+        
+        List<string> hashCopy = [..hashes!];
+             
+        foreach (var entry in archive.Entries)
+        {
+            if (entry.Length == 0) return false;
+            using var stream = entry.Open();
+            var hash = GetHash(stream);
+            if (hashCopy.All(x => x != hash)) return false;
+            hashCopy.Remove(hash);
+        }
+
+        return true;
+    }
+    
+    private static Stream CreateZipArchive(List<(GetObjectResponse file, string name)> files)
+    {
+        var memoryStream = new MemoryStream();
+        using (var archive = new ZipArchive(memoryStream, ZipArchiveMode.Create, true))
+        {
+            foreach (var file in files)
+            {
+                var demoFile = archive.CreateEntry(file.name);
+                using var entryStream = demoFile.Open();
+                file.file.InputStream.CopyTo(entryStream);
+            }
+        }
+
+        memoryStream.Seek(0, SeekOrigin.Begin);
+
+        return memoryStream;
     }
 }

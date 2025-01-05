@@ -9,6 +9,9 @@ using Microsoft.OpenApi.Models;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Primitives;
+using HttpContext = Microsoft.AspNetCore.Http.HttpContext;
 
 namespace Cloud24_25.Endpoints;
 
@@ -26,7 +29,6 @@ public static class UserEndpoints
 
                 if (result.Succeeded)
                 {
-                    // TODO: get user and add the log to their logs
                     await LogService.Log(LogType.Register,$"User {registration.Username} successfully registered", db, user);
                     return Results.Ok(new { Message = "User registered successfully" });
                 }
@@ -111,8 +113,8 @@ public static class UserEndpoints
             });
 
         group.MapPost("/upload-file",
-                async (HttpContext context, IFormFile myFile, MyDbContext db) =>
-                    await FileService.UploadFileAsync(context, myFile, db))
+                async (HttpContext context, IFormFile myFile, [FromForm] StringValues fileHashes, MyDbContext db) =>
+                    await FileService.UploadFileAsync(context, myFile, fileHashes.ToList(), db))
             .WithName("UploadFile")
             .WithTags("Files")
             .Produces(StatusCodes.Status200OK)
@@ -140,6 +142,19 @@ public static class UserEndpoints
                 operation.Responses["401"].Description = "Unauthorized access.";
                 return operation;
             });
+        
+        group.MapPost("/get-file-hash", (IFormFile myFile) => FileService.GetHash(myFile.OpenReadStream()))
+            .WithName("UserGetFileHash")
+            .WithTags("Files")
+            .Produces(StatusCodes.Status200OK)
+            .WithOpenApi(operation =>
+            {
+                operation.Summary = "Calculate File Hash";
+                operation.Description = "Calculates the hash of a file.";
+                operation.Responses["200"].Description = "Successfully calculated hash.";
+                return operation;
+            })
+            .DisableAntiforgery();
 
         group.MapDelete("/delete-file/{fileId}", async (HttpContext context, MyDbContext db, Guid fileId) =>
             await FileService.DeleteFile(context, db, fileId))
@@ -168,9 +183,9 @@ public static class UserEndpoints
                 return operation;
             });
 
-        group.MapGet("/get-file/{fileId}", async (HttpContext context, MyDbContext db, Guid fileId) =>
+        group.MapGet("/download-file/{fileId}", async (HttpContext context, MyDbContext db, Guid fileId) =>
                 await FileService.DownloadFile(context, db, fileId))
-            .WithName("UserGetFile")
+            .WithName("UserDownloadFile")
             .WithTags("Files")
             .Produces(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status401Unauthorized)
@@ -186,6 +201,24 @@ public static class UserEndpoints
                 {
                     fileIdParam.Description = "The unique identifier of the file to download.";
                 }
+
+                operation.Responses["200"].Description = "File downloaded successfully.";
+                operation.Responses["401"].Description = "Unauthorized access.";
+                operation.Responses["404"].Description = "File not found.";
+                return operation;
+            });
+
+        group.MapGet("/download-files", async (HttpContext context, MyDbContext db, [FromQuery] Guid[] ids) =>
+            await FileService.DownloadMultipleFiles(context, db, ids.ToList()))
+            .WithName("UserDownloadFiles")
+            .WithTags("Files")
+            .Produces(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status401Unauthorized)
+            .Produces(StatusCodes.Status404NotFound)
+            .WithOpenApi(operation =>
+            {
+                operation.Summary = "Download files";
+                operation.Description = "Downloads multiple files by their IDs.";
 
                 operation.Responses["200"].Description = "File downloaded successfully.";
                 operation.Responses["401"].Description = "Unauthorized access.";
