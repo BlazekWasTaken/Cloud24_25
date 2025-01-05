@@ -20,6 +20,7 @@ public static class FileService
     private const string BucketName = "bucket-20241022-1249";
     private const string NamespaceName = "frgrfeumviow";
     private const int NumberOfRevisions = 5;
+    private const long Space = (long)2 * 1024 * 1024 * 1024;
 
     private static readonly ObjectStorageClient Client = new(
         new ConfigFileAuthenticationDetailsProvider("DEFAULT"),
@@ -58,7 +59,13 @@ public static class FileService
             .Include(x => x.Files)
             .ThenInclude(x => x.Revisions)
             .First(x => x.UserName == username);
-        
+
+        var userFilesSize = user.Files.Sum(x => x.Revisions.Sum(y => y.Size));
+        if (myFile.OpenReadStream().Length + userFilesSize > Space)
+        {
+            await LogService.Log(LogType.FileUploadAttempt, "There was an attempt to upload a file, but user doesn't have enough free space.", db, user);
+            return Results.BadRequest("Not enough free space to upload.");
+        }
         if (myFile.ContentType != "application/zip")
         {
             if (hashes.Count != 1) return Results.BadRequest();
@@ -293,7 +300,8 @@ public static class FileService
         {
             Id = Guid.NewGuid(),
             Created = DateTime.UtcNow,
-            ObjectName = $"{user.UserName}@{fileObject.Name}@{revisionNumber}"
+            ObjectName = $"{user.UserName}@{fileObject.Name}@{revisionNumber}",
+            Size = fileStream.Length
         };
         fileObject.Revisions.Add(fileRevisionObject);
         

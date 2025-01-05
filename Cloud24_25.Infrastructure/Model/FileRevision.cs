@@ -6,6 +6,7 @@ public class FileRevision
 {
     public Guid Id { get; set; }
     public DateTime Created { get; set; }
+    public long Size { get; set; }
 
     [MaxLength(255)] public required string ObjectName { get; set; }
 }
