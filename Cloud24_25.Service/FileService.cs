@@ -41,7 +41,7 @@ public static class FileService
         var username = endpointUser.Identity?.Name;
         if (username == null)
         {
-            await LogService.Log("There was an attempt to upload a file, but user's credentials are incorrect.", db);
+            await LogService.Log(LogType.FileUploadAttempt, "There was an attempt to upload a file, but user's credentials are incorrect.", db, null);
             await db.SaveChangesAsync();
             return Results.Unauthorized();
         }
@@ -49,7 +49,7 @@ public static class FileService
         File fileObject;
         if (!db.Users.Any() || !db.Users.Any(x => x.UserName == username))
         {
-            await LogService.Log($"User {username} was not found.", db);
+            await LogService.Log(LogType.FileUploadAttempt, $"User {username} was not found.", db, null);
             await db.SaveChangesAsync();
             return Results.NotFound();
         }
@@ -122,11 +122,11 @@ public static class FileService
         catch (Exception e)
         {
             // TODO: test if this doesn't save bad data when errored
-            await LogService.Log($"{username}'s file upload attempt failed. Message: {e.Message}", db);
+            await LogService.Log(LogType.FileUploadAttempt, $"{username}'s file upload attempt failed. Message: {e.Message}", db, user);
             throw;
         }
         
-        await LogService.Log($"{username} uploaded a file called {myFile.FileName}", db);
+        await LogService.Log(LogType.FileUpload, $"{username} uploaded a file called {myFile.FileName}", db, user);
         
         return Results.Ok();
     }
@@ -139,12 +139,12 @@ public static class FileService
         var username = endpointUser.Identity?.Name;
         if (username == null)
         {
-            await LogService.Log("There was an attempt to list files, but user's credentials are incorrect.", db);
+            await LogService.Log(LogType.Failure, "There was an attempt to list files, but user's credentials are incorrect.", db, null);
             return Results.Unauthorized();
         }
         if (!db.Users.Any() || !db.Users.Any(x => x.UserName == username))
         {
-            await LogService.Log($"User {username} was not found.", db);
+            await LogService.Log(LogType.Failure, $"User {username} was not found.", db, null);
             return Results.NotFound();
         }
         
@@ -154,7 +154,7 @@ public static class FileService
             .First(x => x.UserName == username);
         var userFiles = user.Files;
         
-        await LogService.Log($"User {username} listed {userFiles.Count} files.", db);
+        await LogService.Log(LogType.ViewListOfFiles, $"User {username} listed {userFiles.Count} files.", db, user);
         return Results.Ok(userFiles);
     }
 
@@ -167,12 +167,12 @@ public static class FileService
         var username = endpointUser.Identity?.Name;
         if (username == null)
         {
-            await LogService.Log("There was an attempt to delete a file, but user's credentials are incorrect.", db);
+            await LogService.Log(LogType.FileDeleteAttempt, "There was an attempt to delete a file, but user's credentials are incorrect.", db, null);
             return Results.Unauthorized();
         }
         if (!db.Users.Any() || !db.Users.Any(x => x.UserName == username))
         {
-            await LogService.Log($"User {username} was not found.", db);
+            await LogService.Log(LogType.FileDeleteAttempt, $"User {username} was not found.", db, null);
             return Results.NotFound();
         }
         
@@ -201,11 +201,11 @@ public static class FileService
         }
         catch (Exception e)
         {
-            await LogService.Log($"{username}'s file delete attempt failed. Message: {e.Message}", db);
+            await LogService.Log(LogType.FileDeleteAttempt, $"{username}'s file delete attempt failed. Message: {e.Message}", db, user);
             throw;
         }
 
-        await LogService.Log($"{username} deleted a file called {fileToDelete.Name}", db);
+        await LogService.Log(LogType.FileDelete, $"{username} deleted a file called {fileToDelete.Name}", db, user);
         return Results.Ok();
     }
     
@@ -218,13 +218,13 @@ public static class FileService
         var username = endpointUser.Identity?.Name;
         if (username == null)
         {
-            await LogService.Log("There was an attempt to delete a file, but user's credentials are incorrect.", db);
+            await LogService.Log(LogType.FileDeleteAttempt, "There was an attempt to delete a file, but user's credentials are incorrect.", db, null);
             return Results.Unauthorized();
         }
 
         if (!db.Users.Any() || !db.Users.Any(x => x.UserName == username))
         {
-            await LogService.Log($"User {username} was not found.", db);
+            await LogService.Log(LogType.FileDeleteAttempt, $"User {username} was not found.", db, null);
             return Results.NotFound();
         }
         
@@ -240,11 +240,11 @@ public static class FileService
         var objectStream = await GetObject(revisionToDownload.ObjectName);
         if (objectStream.InputStream is null)
         {
-            await LogService.Log($"{username} attempted to download a file, but the file was not found.", db);
+            await LogService.Log(LogType.FileDownloadAttempt, $"{username} attempted to download a file, but the file was not found.", db, user);
             return Results.NotFound();
         }
         
-        await LogService.Log($"{username} downloaded a file called {fileToDownload.Name}.", db);
+        await LogService.Log(LogType.FileDownload, $"{username} downloaded a file called {fileToDownload.Name}.", db, user);
         
         return Results.File(objectStream.InputStream, fileToDownload.ContentType, fileToDownload.Name);
     }

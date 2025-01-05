@@ -27,12 +27,12 @@ public static class UserEndpoints
                 if (result.Succeeded)
                 {
                     // TODO: get user and add the log to their logs
-                    await LogService.Log($"User {registration.Username} successfully registered", db);
+                    await LogService.Log(LogType.Register,$"User {registration.Username} successfully registered", db, user);
                     return Results.Ok(new { Message = "User registered successfully" });
                 }
                 else
                 {
-                    await LogService.Log($"User {registration.Username}'s attempt to register failed", db);
+                    await LogService.Log(LogType.RegisterAttempt, $"User {registration.Username}'s attempt to register failed", db, null);
                     return Results.BadRequest(new { result.Errors });
                 }
             })
@@ -55,7 +55,7 @@ public static class UserEndpoints
                 var user = await userManager.FindByNameAsync(login.Username);
                 if (user == null || !await userManager.CheckPasswordAsync(user, login.Password))
                 {
-                    await LogService.Log($"There was an attempt to login as {login.Username}, but password was incorrect.", db);
+                    await LogService.Log(LogType.LoginAttempt, $"There was an attempt to login as {login.Username}, but password was incorrect.", db, user);
                     return Results.Unauthorized();
                 }
 
@@ -78,7 +78,7 @@ public static class UserEndpoints
                     signingCredentials: creds);
 
                 // TODO: get user and add the log to their logs
-                await LogService.Log($"User {login.Username} logged in.", db);
+                await LogService.Log(LogType.Login, $"User {login.Username} logged in.", db, user);
                 return Results.Ok(new
                 {
                     token = new JwtSecurityTokenHandler().WriteToken(token)
@@ -191,6 +191,19 @@ public static class UserEndpoints
                 operation.Responses["200"].Description = "File downloaded successfully.";
                 operation.Responses["401"].Description = "Unauthorized access.";
                 operation.Responses["404"].Description = "File not found.";
+                return operation;
+            });
+        group.MapGet("/get-logs", (HttpContext context, MyDbContext db) => LogService.ListUserLogs(context, db))
+            .WithName("UserGetLogs")
+            .WithTags("Logs")
+            .Produces(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status401Unauthorized)
+            .WithOpenApi(operation =>
+            {
+                operation.Summary = "List User Logs";
+                operation.Description = "Retrieves a list of all logs for the user.";
+                operation.Responses["200"].Description = "Successfully retrieved user logs.";
+                operation.Responses["401"].Description = "Unauthorized access.";
                 return operation;
             });
     }
