@@ -7,6 +7,7 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using System.Reflection;
 using System.Text;
+using Microsoft.AspNetCore.Http.Features;
 using User = Cloud24_25.Infrastructure.Model.User;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -102,7 +103,14 @@ builder.Services.AddAuthorization(options =>
 // Kestrel config
 builder.Services.Configure<KestrelServerOptions>(options =>
 {
-    options.Limits.MaxRequestBodySize = int.MaxValue;
+    options.Limits.MaxRequestBodySize = long.MaxValue;
+});
+
+builder.Services.Configure<FormOptions>(options =>
+{
+    options.ValueLengthLimit = int.MaxValue;
+    options.MultipartBodyLengthLimit = long.MaxValue;
+    options.MultipartHeadersLengthLimit = int.MaxValue;
 });
 
 var app = builder.Build();
