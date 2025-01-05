@@ -77,7 +77,6 @@ public static class UserEndpoints
                     expires: DateTime.Now.AddDays(1),
                     signingCredentials: creds);
 
-                // TODO: get user and add the log to their logs
                 await LogService.Log(LogType.Login, $"User {login.Username} logged in.", db, user);
                 return Results.Ok(new
                 {

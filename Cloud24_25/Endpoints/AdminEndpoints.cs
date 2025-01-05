@@ -7,6 +7,7 @@ using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
+using Cloud24_25.Service;
 
 namespace Cloud24_25.Endpoints;
 
@@ -16,6 +17,7 @@ public static class AdminEndpoints
     {
         group.MapPost("/register", async (UserRegistrationDto registration,
             UserManager<User> userManager,
+            MyDbContext db,
             RoleManager<IdentityRole> roleManager) =>
         {
             var user = new User { UserName = registration.Username, Files = [], Logs = [] };
@@ -28,6 +30,8 @@ public static class AdminEndpoints
                     await roleManager.CreateAsync(new IdentityRole("Admin"));
                 }
                 await userManager.AddToRoleAsync(user, "Admin");
+                await LogService.Log(LogType.Register, $"Admin {registration.Username} successfully registered", db,
+                    user);
                 return Results.Ok(new { Message = "Admin registered successfully" });
             }
             return Results.BadRequest(new { result.Errors });
@@ -45,11 +49,15 @@ public static class AdminEndpoints
                 return operation;
             });
 
-        group.MapPost("/login", async (LoginDto login, UserManager<User> userManager, IConfiguration config) =>
+        group.MapPost("/login", async (LoginDto login, UserManager<User> userManager, IConfiguration config, MyDbContext db) =>
         {
             var user = await userManager.FindByNameAsync(login.Username);
             if (user == null || !await userManager.CheckPasswordAsync(user, login.Password))
+            {
+                await LogService.Log(LogType.LoginAttempt,
+                    $"There was an attempt to login as {login.Username}, but password was incorrect.", db, user);
                 return Results.Unauthorized();
+            }
 
             var claims = new List<Claim>
             {
@@ -70,6 +78,8 @@ public static class AdminEndpoints
                 expires: DateTime.Now.AddDays(1),
                 signingCredentials: creds);
 
+            await LogService.Log(LogType.Login, $"User {login.Username} logged in", db,
+                user);
             return Results.Ok(new
             {
                 token = new JwtSecurityTokenHandler().WriteToken(token)
