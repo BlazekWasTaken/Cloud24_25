@@ -419,4 +419,26 @@ public static class FileService
 
         return memoryStream;
     }
+
+    public static async Task<IResult> GetFreeSpaceForUser(HttpContext httpContext, MyDbContext db)
+    {
+        var endpointUser = httpContext.User;
+        var username = endpointUser.Identity?.Name;
+        if (username == null)
+        {
+            return Results.Unauthorized();
+        }
+
+        if (!db.Users.Any() || !db.Users.Any(x => x.UserName == username))
+        {
+            return Results.NotFound();
+        }
+        
+        var user = db.Users
+            .Include(x => x.Files)
+            .ThenInclude(x => x.Revisions)
+            .First(x => x.UserName == username);
+        var userFilesSize = user.Files.Sum(x => x.Revisions.Sum(y => y.Size));
+        return Results.Ok(Space - userFilesSize); 
+    }
 }

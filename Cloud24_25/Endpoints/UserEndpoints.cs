@@ -238,5 +238,18 @@ public static class UserEndpoints
                 operation.Responses["401"].Description = "Unauthorized access.";
                 return operation;
             });
+        group.MapGet("/get-free-space", (HttpContext context, MyDbContext db) => FileService.GetFreeSpaceForUser(context, db))
+            .WithName("UserGetFreeSpace")
+            .WithTags("Files")
+            .Produces(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status401Unauthorized)
+            .WithOpenApi(operation =>
+            {
+                operation.Summary = "Get User's Free Space";
+                operation.Description = "Returns the amount of free space left for the user in bytes.";
+                operation.Responses["200"].Description = "Successfully retrieved user's free space.";
+                operation.Responses["401"].Description = "Unauthorized access.";
+                return operation;
+            });
     }
 }
