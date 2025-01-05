@@ -21,7 +21,7 @@ builder.Services.AddSwaggerGen(options =>
     {
         Title = "Cloud24_25 API",
         Version = "v1",
-        Description = "API for file management and user authentication",
+        Description = "API for file management and user authorization",
         Contact = new OpenApiContact
         {
             Name = "API Support",
