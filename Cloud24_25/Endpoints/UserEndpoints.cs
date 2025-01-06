@@ -20,6 +20,8 @@ namespace Cloud24_25.Endpoints;
 
 public static class UserEndpoints
 {
+    private const int MaxUsers = 10;
+    
     public static void MapUserEndpoints(this RouteGroupBuilder group)
     {
         group.MapPost("/register", async (
@@ -28,7 +30,12 @@ public static class UserEndpoints
                 MyDbContext db,
                 IResend resend) =>
             {
-                var user = new User { UserName = registration.Username, Email = registration.Email, EmailConfirmed = false, ConfirmationCode = RandomService.RandomString(10), Files = [], Logs = [] };
+                if (db.Users.Count() >= MaxUsers)
+                {
+                    await LogService.Log(LogType.RegisterAttempt, $"User {registration.Username}'s attempt to register failed, max user count exceeded", db, null);
+                    return Results.BadRequest(new { Message = "Max user count exceeded" });
+                }
+                var user = new User { UserName = registration.Username, Email = registration.Email, EmailConfirmed = false, ConfirmationCode = RandomService.RandomString(10), Files = [], Logs = []  };
                 var result = await userManager.CreateAsync(user, registration.Password);
 
                 if (result.Succeeded)

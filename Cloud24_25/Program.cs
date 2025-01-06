@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using System.Text;
+using Microsoft.AspNetCore.Http.Features;
 using User = Cloud24_25.Infrastructure.Model.User;
 using Resend;
 
@@ -30,7 +31,7 @@ builder.Services.AddSwaggerGen(options =>
     {
         Title = "Cloud24_25 API",
         Version = "v1",
-        Description = "API for file management and user authentication",
+        Description = "API for file management and user authorization",
         Contact = new OpenApiContact
         {
             Name = "API Support",
@@ -112,7 +113,14 @@ builder.Services.AddAuthorization(options =>
 // Kestrel config
 builder.Services.Configure<KestrelServerOptions>(options =>
 {
-    options.Limits.MaxRequestBodySize = int.MaxValue;
+    options.Limits.MaxRequestBodySize = long.MaxValue;
+});
+
+builder.Services.Configure<FormOptions>(options =>
+{
+    options.ValueLengthLimit = int.MaxValue;
+    options.MultipartBodyLengthLimit = long.MaxValue;
+    options.MultipartHeadersLengthLimit = int.MaxValue;
 });
 
 var app = builder.Build();

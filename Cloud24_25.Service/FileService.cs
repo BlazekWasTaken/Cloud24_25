@@ -11,6 +11,7 @@ using Oci.Common.Retry;
 using Oci.ObjectstorageService;
 using Oci.ObjectstorageService.Requests;
 using Oci.ObjectstorageService.Responses;
+using Oci.ObjectstorageService.Transfer;
 using File = Cloud24_25.Infrastructure.Model.File;
 
 namespace Cloud24_25.Service;
@@ -27,6 +28,7 @@ public static class FileService
         new ClientConfiguration
         {
             ClientUserAgent = "Cloud24_25",
+            TimeoutMillis = 1000 * 1000,
             RetryConfiguration = new RetryConfiguration
             {
                 // maximum number of attempts to retry the same request
@@ -346,9 +348,10 @@ public static class FileService
             BucketName = BucketName,
             NamespaceName = NamespaceName,
             ObjectName = objectName,
-            PutObjectBody = file
+            PutObjectBody = file,
+            
         };
-
+        
         await Client.PutObject(putObjectRequest);
     }
 
