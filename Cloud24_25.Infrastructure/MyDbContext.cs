@@ -17,10 +17,10 @@ public class MyDbContext(DbContextOptions<MyDbContext> options) : IdentityDbCont
         var connectionString = "Server=10.0.0.60;Database=test_db;Uid=cloud_admin;Pwd=Cloud_admin1;"; // TODO: use secret
         var serverVersion = ServerVersion.AutoDetect(connectionString);
         optionsBuilder
-            .UseMySql(connectionString, serverVersion)
-            .LogTo(Console.WriteLine, LogLevel.Information)
-            .EnableSensitiveDataLogging()
-            .EnableDetailedErrors();
+            .UseMySql(connectionString, serverVersion);
+        // .LogTo(Console.WriteLine, LogLevel.Information)
+        // .EnableSensitiveDataLogging()
+        // .EnableDetailedErrors();
     }
     
     public DbSet<User> Users { get; set; }

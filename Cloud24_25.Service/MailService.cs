@@ -8,7 +8,11 @@ public static class MailService
     {
         var message = new EmailMessage
         {
-            From = "cloud24-25@bdymek.com",
+            From = new EmailAddress
+            {
+                Email = "cloud24-25@bdymek.com",
+                DisplayName = "Cloud24-25 File Storage"
+            },
             To = to,
             Subject = "Confirm your email",
             HtmlBody = "<div>" +

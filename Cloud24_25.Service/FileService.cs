@@ -11,7 +11,6 @@ using Oci.Common.Retry;
 using Oci.ObjectstorageService;
 using Oci.ObjectstorageService.Requests;
 using Oci.ObjectstorageService.Responses;
-using Oci.ObjectstorageService.Transfer;
 using File = Cloud24_25.Infrastructure.Model.File;
 
 namespace Cloud24_25.Service;
@@ -205,7 +204,6 @@ public static class FileService
         }
         
         await LogService.Log(LogType.FileDownload, $"{username} downloaded a file called {fileToDownload.Name}.", db, user);
-        
         return Results.File(objectStream.InputStream, fileToDownload.ContentType, fileToDownload.Name);
     }
     
