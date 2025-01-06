@@ -5,11 +5,21 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
-using System.Reflection;
 using System.Text;
 using User = Cloud24_25.Infrastructure.Model.User;
+using Resend;
 
 var builder = WebApplication.CreateBuilder(args);
+
+//maile
+builder.Services.AddOptions();
+builder.Services.AddHttpClient<ResendClient>();
+string token = Environment.GetEnvironmentVariable( "RESEND_APITOKEN" )!;
+builder.Services.Configure<ResendClientOptions>( o =>
+{
+    o.ApiToken = token;
+} );
+builder.Services.AddTransient<IResend, ResendClient>();
 
 // Swagger
 builder.Services.AddEndpointsApiExplorer();

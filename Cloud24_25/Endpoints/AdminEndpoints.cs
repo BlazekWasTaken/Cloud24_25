@@ -20,7 +20,7 @@ public static class AdminEndpoints
             MyDbContext db,
             RoleManager<IdentityRole> roleManager) =>
         {
-            var user = new User { UserName = registration.Username, Files = [], Logs = [] };
+            var user = new User { UserName = registration.Username, Email = registration.Email, EmailConfirmed = false, ConfirmationCode = RandomService.RandomString(10), Files = [], Logs = [] };
             var result = await userManager.CreateAsync(user, registration.Password);
 
             if (!result.Succeeded) return Results.BadRequest(new { result.Errors });

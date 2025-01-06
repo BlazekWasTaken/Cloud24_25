@@ -10,6 +10,7 @@
     <ItemGroup>
         <PackageReference Include="OCI.DotNetSDK.Core" Version="101.1.0" />
         <PackageReference Include="OCI.DotNetSDK.Objectstorage" Version="101.1.0" />
+        <PackageReference Include="Resend" Version="0.0.12" />
     </ItemGroup>
 
     <ItemGroup>

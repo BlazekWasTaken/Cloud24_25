@@ -14,10 +14,10 @@ public class Log
 public enum LogType
 {
     Register,
+    EmailConfirmation,
     Login,
     RegisterAttempt,
     LoginAttempt,
-    Logout,
     FileUpload,
     FileDelete,
     FileDownload,
