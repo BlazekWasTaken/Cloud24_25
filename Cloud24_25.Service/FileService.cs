@@ -71,7 +71,8 @@ public static class FileService
         {
             if (hashes.Count != 1) return Results.BadRequest();
             if (GetHash(myFile.OpenReadStream()) != hashes[0]) return Results.BadRequest();
-            await SaveFile(user, myFile.OpenReadStream(), myFile.FileName, myFile.ContentType, db);
+            var stream = myFile.OpenReadStream();
+            await SaveFile(user, stream, myFile.FileName, myFile.ContentType, stream.Length, db);
         }
         else
         {
@@ -83,7 +84,7 @@ public static class FileService
             {
                 new FileExtensionContentTypeProvider().TryGetContentType(entry.Name, out var contentType);
                 contentType ??= "application/octet-stream";
-                await SaveFile(user, entry.Open(), entry.Name, contentType, db);
+                await SaveFile(user, entry.Open(), entry.Name, contentType, entry.Length, db);
             }
         }
         
@@ -264,7 +265,7 @@ public static class FileService
         return Results.File(archive, "application/zip", $"download_{username}_{DateTime.UtcNow:yyyy-MM-dd_HH-mm-ss}.zip");
     }
 
-    private static async Task SaveFile(User user, Stream fileStream, string fileName, string fileContentType, MyDbContext db)
+    private static async Task SaveFile(User user, Stream fileStream, string fileName, string fileContentType, long streamLength, MyDbContext db)
     {
         var userFiles = user.Files;
         
@@ -301,7 +302,7 @@ public static class FileService
             Id = Guid.NewGuid(),
             Created = DateTime.UtcNow,
             ObjectName = $"{user.UserName}@{fileObject.Name}@{revisionNumber}",
-            Size = fileStream.Length
+            Size = streamLength
         };
         fileObject.Revisions.Add(fileRevisionObject);
         
