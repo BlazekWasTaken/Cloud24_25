@@ -1,6 +1,5 @@
 using Cloud24_25.Infrastructure;
 using Cloud24_25.Infrastructure.Model;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -26,9 +25,7 @@ public static class LogService
         db.Logs.Add(log);
         await db.SaveChangesAsync();
     }
-    [Authorize(Policy = "UserOrAdmin")]
     public static async Task<IResult> ListUserLogs(HttpContext httpContext, 
-        UserManager<User> userManager,
         MyDbContext db)
     {
         var endpointUser = httpContext.User;
@@ -45,10 +42,29 @@ public static class LogService
         var logs = user.Logs.OrderByDescending(x => x.Date);
         return Results.Ok(logs);
     }
-    [Authorize(Policy = "AdminOnly")]
-    public static async Task<IResult> ListAllLogs(MyDbContext db)
+    public static async Task<IResult> ListAllLogs(HttpContext httpContext, 
+        UserManager<User> userManager,
+        MyDbContext db)
     {
-        var logs = (await db.Logs.ToListAsync()).OrderByDescending(x => x.Date);
+        var endpointUser = httpContext.User;
+        var username = endpointUser.Identity?.Name;
+        if (username == null) return Results.Unauthorized();
+        
+        if (!db.Users.Any() || !db.Users.Any(x => x.UserName == username))
+        {
+            await Log(LogType.Failure, $"Admin or user {username} was not found.", db, null);
+            return Results.NotFound();
+        }
+        var user = db.Users
+            .Include(x => x.Logs)
+            .First(x => x.UserName == username);
+
+        if (!(await userManager.GetRolesAsync(user)).Contains("Admin"))
+        {
+            await Log(LogType.Failure, $"User {username} attempted to view all application logs, but is not an admin.", db, user);
+            return Results.Forbid();
+        }
+        var logs = db.Logs.OrderByDescending(x => x.Date);
         return Results.Ok(logs);
     }
 }

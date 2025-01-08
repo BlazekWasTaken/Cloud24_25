@@ -40,8 +40,8 @@ public static class FileService
     public static async Task<IResult> UploadFileAsync(
         HttpContext context,
         IFormFile myFile,
-        [FromForm] StringValues hashes,
-        MyDbContext db)
+        MyDbContext db,
+        [FromForm] StringValues hashes)
     {
         var endpointUser = context.User;
         var username = endpointUser.Identity?.Name;

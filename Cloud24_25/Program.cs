@@ -142,5 +142,6 @@ app.UseAuthorization();
 // Endpoints
 app.MapGroup("user").MapUserEndpoints();
 app.MapGroup("admin").MapAdminEndpoints();
+app.MapGroup("files").MapFileEndpoints();
 
 app.Run();
