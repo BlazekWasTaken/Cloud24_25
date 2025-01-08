@@ -1,20 +1,16 @@
-using System.Data.Common;
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+using System.Text;
 using Cloud24_25.Infrastructure;
 using Cloud24_25.Infrastructure.Dtos;
 using Cloud24_25.Infrastructure.Model;
 using Cloud24_25.Service;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
-using System.IdentityModel.Tokens.Jwt;
-using System.Security.Claims;
-using System.Security.Cryptography;
-using System.Text;
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Primitives;
 using Resend;
-using HttpContext = Microsoft.AspNetCore.Http.HttpContext;
 
 namespace Cloud24_25.Endpoints;
 
@@ -41,7 +37,7 @@ public static class UserEndpoints
                 if (result.Succeeded)
                 {
                     await LogService.Log(LogType.Register,$"User {registration.Username} successfully registered", db, user);
-                    await MailService.SendConfirmationEmail(resend, user.Email, user.ConfirmationCode, new Guid(user.Id));
+                    await MailService.SendConfirmationEmail(resend, user.Email, user.ConfirmationCode, user);
                     return Results.Ok(new { Message = "User registered successfully" });
                 }
 
@@ -67,14 +63,13 @@ public static class UserEndpoints
                 Console.WriteLine("aaaaaaa");
                 var user = db.Users.FirstOrDefault(x => x.Id == confirmation.Id.ToString());
                 if (user == null) return Results.NotFound();
-                if (user.ConfirmationCode == confirmation.Code)
-                {
-                    user.EmailConfirmed = true;
-                    await LogService.Log(LogType.EmailConfirmation, $"{user.UserName} confirmed their email.", db, user);
-                    await db.SaveChangesAsync();
-                    return Results.Ok();
-                }
-                return Results.BadRequest();
+                if (user.ConfirmationCode != confirmation.Code) return Results.BadRequest();
+                user.EmailConfirmed = true;
+                await LogService.Log(LogType.EmailConfirmation, $"{user.UserName} confirmed their email.", db,
+                    user);
+                await db.SaveChangesAsync();
+                return Results.Ok();
+
             })
             .WithName("UserConfirmEmail")
             .WithTags("User")
@@ -89,7 +84,6 @@ public static class UserEndpoints
                 return operation;
             })
             .DisableAntiforgery();
-
         group.MapPost("/login", async (LoginDto login, UserManager<User> userManager,
             IConfiguration config, MyDbContext db) =>
             {
@@ -108,7 +102,6 @@ public static class UserEndpoints
 
                 var claims = new[]
                 {
-            
                     new Claim(JwtRegisteredClaimNames.Sub, user.Id),
                     new Claim(JwtRegisteredClaimNames.UniqueName, user.UserName),
                     new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
@@ -144,24 +137,7 @@ public static class UserEndpoints
                 operation.Responses["403"].Description = "User's email not confirmed.";
                 return operation;
             });
-
-        group.MapGet("/authorized-hello-world", [Authorize] () => "Hello World! You are authorized!")
-            .WithName("UserAuthorizedHelloWorld")
-            .WithTags("Authorization")
-            .Produces(StatusCodes.Status200OK)
-            .Produces(StatusCodes.Status401Unauthorized)
-            .WithOpenApi(operation =>
-            {
-                operation.Summary = "Authorized Hello World for Users";
-                operation.Description = "Returns a greeting message for authorized users.";
-                operation.Responses["200"].Description = "Successfully retrieved greeting message.";
-                operation.Responses["401"].Description = "Unauthorized access.";
-                return operation;
-            });
-
-        group.MapPost("/upload-file",
-                async (HttpContext context, IFormFile myFile, [FromForm] StringValues fileHashes, MyDbContext db) =>
-                    await FileService.UploadFileAsync(context, myFile, fileHashes.ToList(), db))
+        group.MapPost("/upload-file", FileService.UploadFileAsync)
             .WithName("UploadFile")
             .WithTags("Files")
             .Produces(StatusCodes.Status200OK)
@@ -175,8 +151,7 @@ public static class UserEndpoints
                 return operation;
             })
             .DisableAntiforgery();
-
-        group.MapGet("/get-files", (HttpContext context, MyDbContext db) => FileService.ListFiles(context, db))
+        group.MapGet("/get-files", FileService.ListFiles)
             .WithName("UserGetFiles")
             .WithTags("Files")
             .Produces(StatusCodes.Status200OK)
@@ -189,7 +164,6 @@ public static class UserEndpoints
                 operation.Responses["401"].Description = "Unauthorized access.";
                 return operation;
             });
-        
         group.MapPost("/get-file-hash", (IFormFile myFile) => FileService.GetHash(myFile.OpenReadStream()))
             .WithName("UserGetFileHash")
             .WithTags("Files")
@@ -202,9 +176,7 @@ public static class UserEndpoints
                 return operation;
             })
             .DisableAntiforgery();
-
-        group.MapDelete("/delete-file/{fileId}", async (HttpContext context, MyDbContext db, Guid fileId) =>
-            await FileService.DeleteFile(context, db, fileId))
+        group.MapDelete("/delete-file/{fileId}", FileService.DeleteFile)
             .WithName("UserDeleteFile")
             .WithTags("Files")
             .Produces(StatusCodes.Status200OK)
@@ -229,9 +201,7 @@ public static class UserEndpoints
                 operation.Responses["404"].Description = "File not found.";
                 return operation;
             });
-
-        group.MapGet("/download-file/{fileId}", async (HttpContext context, MyDbContext db, Guid fileId) =>
-                await FileService.DownloadFile(context, db, fileId))
+        group.MapGet("/download-file/{fileId}", FileService.DownloadFile)
             .WithName("UserDownloadFile")
             .WithTags("Files")
             .Produces(StatusCodes.Status200OK)
@@ -254,9 +224,7 @@ public static class UserEndpoints
                 operation.Responses["404"].Description = "File not found.";
                 return operation;
             });
-
-        group.MapGet("/download-files", async (HttpContext context, MyDbContext db, [FromQuery] Guid[] ids) =>
-            await FileService.DownloadMultipleFiles(context, db, ids.ToList()))
+        group.MapGet("/download-files", FileService.DownloadMultipleFiles)
             .WithName("UserDownloadFiles")
             .WithTags("Files")
             .Produces(StatusCodes.Status200OK)
@@ -272,7 +240,7 @@ public static class UserEndpoints
                 operation.Responses["404"].Description = "File not found.";
                 return operation;
             });
-        group.MapGet("/get-logs", (HttpContext context, MyDbContext db) => LogService.ListUserLogs(context, db))
+        group.MapGet("/get-logs", LogService.ListUserLogs)
             .WithName("UserGetLogs")
             .WithTags("Logs")
             .Produces(StatusCodes.Status200OK)
@@ -285,7 +253,7 @@ public static class UserEndpoints
                 operation.Responses["401"].Description = "Unauthorized access.";
                 return operation;
             });
-        group.MapGet("/get-free-space", (HttpContext context, MyDbContext db) => FileService.GetFreeSpaceForUser(context, db))
+        group.MapGet("/get-free-space", FileService.GetFreeSpaceForUser)
             .WithName("UserGetFreeSpace")
             .WithTags("Files")
             .Produces(StatusCodes.Status200OK)

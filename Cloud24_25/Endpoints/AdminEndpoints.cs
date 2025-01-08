@@ -45,7 +45,6 @@ public static class AdminEndpoints
                 operation.Responses["400"].Description = "Registration failed.";
                 return operation;
             });
-
         group.MapPost("/login", async (LoginDto login, UserManager<User> userManager, IConfiguration config, MyDbContext db) =>
         {
             var user = await userManager.FindByNameAsync(login.Username);
@@ -94,22 +93,6 @@ public static class AdminEndpoints
                 operation.Responses["401"].Description = "Invalid credentials.";
                 return operation;
             });
-
-        group.MapGet("/authorized-hello-world", [Authorize(Roles = "Admin")] () =>
-            "Hello World! You are authorized as admin!")
-            .WithName("AdminAuthorizedHelloWorld")
-            .WithTags("Authorization")
-            .Produces(StatusCodes.Status200OK)
-            .Produces(StatusCodes.Status401Unauthorized)
-            .WithOpenApi(operation =>
-            {
-                operation.Summary = "Authorized Hello World for Admins";
-                operation.Description = "Returns a greeting message for authorized admins.";
-                operation.Responses["200"].Description = "Successfully retrieved greeting message.";
-                operation.Responses["401"].Description = "Unauthorized access.";
-                return operation;
-            });
-
         group.MapGet("/get-logs", [Authorize(Roles = "Admin")] (MyDbContext db) =>
         {
             var logs = db.Logs.ToList().OrderByDescending(x => x.Date);

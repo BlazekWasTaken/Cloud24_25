@@ -1,7 +1,6 @@
 using Cloud24_25.Infrastructure.Model;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
 using File = Cloud24_25.Infrastructure.Model.File;
 
 namespace Cloud24_25.Infrastructure;
@@ -14,13 +13,9 @@ public class MyDbContext(DbContextOptions<MyDbContext> options) : IdentityDbCont
     }
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
-        var connectionString = "Server=10.0.0.60;Database=test_db;Uid=cloud_admin;Pwd=Cloud_admin1;"; // TODO: use secret
+        var connectionString = "Server=10.0.0.60;Database=test_db;Uid=cloud_admin;Pwd=Cloud_admin1;";
         var serverVersion = ServerVersion.AutoDetect(connectionString);
-        optionsBuilder
-            .UseMySql(connectionString, serverVersion);
-        // .LogTo(Console.WriteLine, LogLevel.Information)
-        // .EnableSensitiveDataLogging()
-        // .EnableDetailedErrors();
+        optionsBuilder.UseMySql(connectionString, serverVersion);
     }
     
     public DbSet<User> Users { get; set; }

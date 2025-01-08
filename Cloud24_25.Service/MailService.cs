@@ -1,10 +1,11 @@
+using Cloud24_25.Infrastructure.Model;
 using Resend;
 
 namespace Cloud24_25.Service;
 
 public static class MailService
 {
-    public static async Task SendConfirmationEmail(IResend resend, string to, string code, Guid userId)
+    public static async Task SendConfirmationEmail(IResend resend, string to, string code, User user)
     {
         var message = new EmailMessage
         {
@@ -15,16 +16,16 @@ public static class MailService
             },
             To = to,
             Subject = "Confirm your email",
-            HtmlBody = "<div>" +
-                       "<strong>Confirm your email using the link below</strong>" +
-                       "</div>" +
-                       "<div>" +
-                       "<form action=\"https://localhost:7039/user/confirm-email\" method=\"post\" >" +
-                       "<input type=\"hidden\" name=\"id\" value=\"" + userId + "\">" +
-                       "<input type=\"hidden\" name=\"code\" value=\"" + code + "\">" +
-                       "<input type=\"submit\" value=\"Confirm email\" >" +
-                       "</form>" +
-                       "</div>"
+            HtmlBody = 
+                "<div>" +
+                    $"<strong>Hi {user.UserName}!</strong>" +
+                    "<strong>Your code is:</strong>" +
+                    "<table style=\"border: 1px solid black;\">" +
+                        "<tr>" +
+                            $"<td>{code}</td>" +
+                        "</tr>" +
+                    "</table>" +
+                "</div>"
         };
         
         await resend.EmailSendAsync( message );

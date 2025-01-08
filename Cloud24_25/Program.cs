@@ -15,7 +15,7 @@ var builder = WebApplication.CreateBuilder(args);
 //maile
 builder.Services.AddOptions();
 builder.Services.AddHttpClient<ResendClient>();
-string token = Environment.GetEnvironmentVariable( "RESEND_APITOKEN" )!;
+var token = Environment.GetEnvironmentVariable( "RESEND_APITOKEN" )!;
 builder.Services.Configure<ResendClientOptions>( o =>
 {
     o.ApiToken = token;
@@ -24,7 +24,6 @@ builder.Services.AddTransient<IResend, ResendClient>();
 
 // Swagger
 builder.Services.AddEndpointsApiExplorer();
-// builder.Services.AddOpenApi();
 builder.Services.AddSwaggerGen(options =>
 {
     options.SwaggerDoc("v1", new OpenApiInfo
@@ -35,7 +34,7 @@ builder.Services.AddSwaggerGen(options =>
         Contact = new OpenApiContact
         {
             Name = "API Support",
-            Email = "support@example.com"
+            Email = "support@bdymek.com"
         }
     });
     options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
@@ -105,10 +104,8 @@ builder.Services.AddAuthentication(options =>
 });
 
 // Authorization
-builder.Services.AddAuthorization(options =>
-{
-    options.AddPolicy("AdminOnly", policy => policy.RequireRole("Admin"));
-});
+builder.Services.AddAuthorizationBuilder()
+    .AddPolicy("AdminOnly", policy => policy.RequireRole("Admin"));
 
 // Kestrel config
 builder.Services.Configure<KestrelServerOptions>(options =>
@@ -139,18 +136,5 @@ app.UseAuthorization();
 // Endpoints
 app.MapGroup("user").MapUserEndpoints();
 app.MapGroup("admin").MapAdminEndpoints();
-
-// Test route
-app.MapGet("/helloworld", () => "Hello World!")
-    .WithName("HelloWorld")
-    .WithTags("Authorization")
-    .WithOpenApi(operation =>
-    {
-        operation.Summary = "Unauthorized Hello World for Everyone";
-        operation.Description = "Returns a greeting message for authorized and unauthorized users.";
-        return operation;
-    });
-
-// app.MapOpenApi();
 
 app.Run();

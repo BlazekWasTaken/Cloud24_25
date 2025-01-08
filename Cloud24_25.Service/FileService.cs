@@ -5,6 +5,7 @@ using Cloud24_25.Infrastructure.Model;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Primitives;
 using Oci.Common;
 using Oci.Common.Auth;
 using Oci.Common.Retry;
@@ -36,11 +37,11 @@ public static class FileService
                 RetryableStatusCodeFamilies = [4, 5]
             }
         });
-
+    
     public static async Task<IResult> UploadFileAsync(
         HttpContext context,
         IFormFile myFile,
-        List<string?> hashes,
+        StringValues hashes,
         MyDbContext db)
     {
         var endpointUser = context.User;
@@ -90,7 +91,6 @@ public static class FileService
         
         return Results.Ok();
     }
-
     public static async Task<IResult> ListFiles(
         HttpContext context, 
         MyDbContext db)
@@ -117,7 +117,6 @@ public static class FileService
         await LogService.Log(LogType.ViewListOfFiles, $"User {username} listed {userFiles.Count} files.", db, user);
         return Results.Ok(userFiles);
     }
-
     public static async Task<IResult> DeleteFile(
         HttpContext context,
         MyDbContext db,
@@ -168,7 +167,6 @@ public static class FileService
         await LogService.Log(LogType.FileDelete, $"{username} deleted a file called {fileToDelete.Name}", db, user);
         return Results.Ok();
     }
-    
     public static async Task<IResult> DownloadFile(
         HttpContext context,
         MyDbContext db,
@@ -207,11 +205,10 @@ public static class FileService
         await LogService.Log(LogType.FileDownload, $"{username} downloaded a file called {fileToDownload.Name}.", db, user);
         return Results.File(objectStream.InputStream, fileToDownload.ContentType, fileToDownload.Name);
     }
-    
     public static async Task<IResult> DownloadMultipleFiles(
         HttpContext context,
         MyDbContext db,
-        List<Guid> ids)
+        Guid[] ids)
     {
         var endpointUser = context.User;
         var username = endpointUser.Identity?.Name;
@@ -259,12 +256,10 @@ public static class FileService
             
             await LogService.Log(LogType.FileDownload, $"{username} downloaded a file called {name}.", db, user);
         }
-        
         var archive = CreateZipArchive(objects);
         
         return Results.File(archive, "application/zip", $"download_{username}_{DateTime.UtcNow:yyyy-MM-dd_HH-mm-ss}.zip");
     }
-
     private static async Task SaveFile(User user, Stream fileStream, string fileName, string fileContentType, long streamLength, MyDbContext db)
     {
         var userFiles = user.Files;
@@ -287,15 +282,9 @@ public static class FileService
             };
         }
 
-        int revisionNumber;
-        if (fileObject.Revisions.Count == 0)
-        {
-            revisionNumber = 1;
-        }
-        else
-        {
-            revisionNumber = int.Parse(fileObject.Revisions.OrderBy(x => x.Created).Last().ObjectName.Split('@').Last()) + 1;
-        }
+        var revisionNumber = fileObject.Revisions.Count == 0
+            ? 1
+            : int.Parse(fileObject.Revisions.OrderBy(x => x.Created).Last().ObjectName.Split('@').Last()) + 1;
         
         FileRevision fileRevisionObject = new()
         {
@@ -314,7 +303,6 @@ public static class FileService
         {
             db.Files.Update(fileObject);
         }
-        
         await db.FileRevisions.AddAsync(fileRevisionObject);
         user.Files.Add(fileObject);
         db.Users.Update(user);
@@ -336,10 +324,8 @@ public static class FileService
             await LogService.Log(LogType.FileUploadAttempt, $"{user.UserName}'s file upload attempt failed. Message: {e.Message}", db, user);
             throw;
         }
-        
         await LogService.Log(LogType.FileUpload, $"{user.UserName} uploaded a file called {fileName}", db, user);
     }
-    
     private static async Task PutObject(string objectName, Stream file)
     { 
         var putObjectRequest = new PutObjectRequest
@@ -350,10 +336,8 @@ public static class FileService
             PutObjectBody = file,
             
         };
-        
         await Client.PutObject(putObjectRequest);
     }
-
     private static async Task<GetObjectResponse> GetObject(string objectName)
     {
         var getObjectRequest = new GetObjectRequest
@@ -365,7 +349,6 @@ public static class FileService
 
         return await Client.GetObject(getObjectRequest);
     }
-
     private static async Task DeleteObject(string objectName)
     {
         var deleteObjectRequest = new DeleteObjectRequest
@@ -374,37 +357,30 @@ public static class FileService
             NamespaceName = NamespaceName,
             ObjectName = objectName
         };
-
         await Client.DeleteObject(deleteObjectRequest);
     }
-    
     public static string GetHash(Stream stream)
     {
         using var sha512 = SHA512.Create();
         var hash = sha512.ComputeHash(stream);
         return Convert.ToBase64String(hash);
     }
-    
-    private static bool IsZipArchiveCorrect(ZipArchive archive, List<string?> hashes)
+    private static bool IsZipArchiveCorrect(ZipArchive archive, StringValues hashes)
     {
-        if (hashes.Any(x => x is null)) return false;
+        if (hashes.Any(x => x is null || x.Length == 0)) return false;
         if (archive.Entries.Count != hashes.Count) return false;
         
         List<string> hashCopy = [..hashes!];
-             
         foreach (var entry in archive.Entries)
         {
-            if (entry.Length == 0) return false;
             using var stream = entry.Open();
             var hash = GetHash(stream);
             if (hashCopy.All(x => x != hash)) return false;
             hashCopy.Remove(hash);
         }
-
         return true;
     }
-    
-    private static Stream CreateZipArchive(List<(GetObjectResponse file, string name)> files)
+    private static MemoryStream CreateZipArchive(List<(GetObjectResponse file, string name)> files)
     {
         var memoryStream = new MemoryStream();
         using (var archive = new ZipArchive(memoryStream, ZipArchiveMode.Create, true))
@@ -416,25 +392,15 @@ public static class FileService
                 file.file.InputStream.CopyTo(entryStream);
             }
         }
-
         memoryStream.Seek(0, SeekOrigin.Begin);
-
         return memoryStream;
     }
-
-    public static async Task<IResult> GetFreeSpaceForUser(HttpContext httpContext, MyDbContext db)
+    public static IResult GetFreeSpaceForUser(HttpContext httpContext, MyDbContext db)
     {
         var endpointUser = httpContext.User;
         var username = endpointUser.Identity?.Name;
-        if (username == null)
-        {
-            return Results.Unauthorized();
-        }
-
-        if (!db.Users.Any() || !db.Users.Any(x => x.UserName == username))
-        {
-            return Results.NotFound();
-        }
+        if (username == null) return Results.Unauthorized();
+        if (!db.Users.Any() || !db.Users.Any(x => x.UserName == username)) return Results.NotFound();
         
         var user = db.Users
             .Include(x => x.Files)
