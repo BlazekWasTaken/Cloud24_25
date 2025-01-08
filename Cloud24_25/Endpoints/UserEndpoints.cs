@@ -1,49 +1,13 @@
-using System.IdentityModel.Tokens.Jwt;
-using System.Security.Claims;
-using System.Text;
-using Cloud24_25.Infrastructure;
-using Cloud24_25.Infrastructure.Dtos;
-using Cloud24_25.Infrastructure.Model;
 using Cloud24_25.Service;
-using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
-using Resend;
 
 namespace Cloud24_25.Endpoints;
 
 public static class UserEndpoints
 {
-    private const int MaxUsers = 10;
-    
     public static void MapUserEndpoints(this RouteGroupBuilder group)
     {
-        group.MapPost("/register", async (
-                UserRegistrationDto registration,
-                UserManager<User> userManager,
-                MyDbContext db,
-                IResend resend) =>
-            {
-                if (db.Users.Count() >= MaxUsers)
-                {
-                    await LogService.Log(LogType.RegisterAttempt, $"User {registration.Username}'s attempt to register failed, max user count exceeded", db, null);
-                    return Results.BadRequest(new { Message = "Max user count exceeded" });
-                }
-                var user = new User { UserName = registration.Username, Email = registration.Email, EmailConfirmed = false, ConfirmationCode = RandomService.RandomString(10), Files = [], Logs = []  };
-                var result = await userManager.CreateAsync(user, registration.Password);
-
-                if (result.Succeeded)
-                {
-                    await LogService.Log(LogType.Register,$"User {registration.Username} successfully registered", db, user);
-                    await MailService.SendConfirmationEmail(resend, user.Email, user.ConfirmationCode, user);
-                    return Results.Ok(new { Message = "User registered successfully" });
-                }
-
-                await LogService.Log(LogType.RegisterAttempt, $"User {registration.Username}'s attempt to register failed", db, null);
-                return Results.BadRequest(new { result.Errors });
-            })
+        group.MapPost("/register", LoginService.UserRegistration)
             .WithName("UserRegister")
             .WithTags("User")
             .Produces(StatusCodes.Status200OK)
@@ -56,21 +20,7 @@ public static class UserEndpoints
                 operation.Responses["400"].Description = "Registration failed.";
                 return operation;
             });
-        
-        group.MapPost("/confirm-email", async (
-                MyDbContext db, [FromForm]UserConfirmationDto confirmation) =>
-            {
-                Console.WriteLine("aaaaaaa");
-                var user = db.Users.FirstOrDefault(x => x.Id == confirmation.Id.ToString());
-                if (user == null) return Results.NotFound();
-                if (user.ConfirmationCode != confirmation.Code) return Results.BadRequest();
-                user.EmailConfirmed = true;
-                await LogService.Log(LogType.EmailConfirmation, $"{user.UserName} confirmed their email.", db,
-                    user);
-                await db.SaveChangesAsync();
-                return Results.Ok();
-
-            })
+        group.MapPost("/confirm-email", LoginService.UserConfirmation)
             .WithName("UserConfirmEmail")
             .WithTags("User")
             .Produces(StatusCodes.Status200OK)
@@ -84,45 +34,7 @@ public static class UserEndpoints
                 return operation;
             })
             .DisableAntiforgery();
-        group.MapPost("/login", async (LoginDto login, UserManager<User> userManager,
-            IConfiguration config, MyDbContext db) =>
-            {
-                var user = await userManager.FindByNameAsync(login.Username);
-                if (user == null || !await userManager.CheckPasswordAsync(user, login.Password))
-                {
-                    await LogService.Log(LogType.LoginAttempt, $"There was an attempt to login as {login.Username}, but password was incorrect.", db, user);
-                    return Results.Unauthorized();
-                }
-
-                if (!user.EmailConfirmed)
-                {
-                    await LogService.Log(LogType.LoginAttempt, $"There was an attempt to login as {login.Username}, but email is not confirmed.", db, user);
-                    return Results.Forbid();
-                }
-
-                var claims = new[]
-                {
-                    new Claim(JwtRegisteredClaimNames.Sub, user.Id),
-                    new Claim(JwtRegisteredClaimNames.UniqueName, user.UserName),
-                    new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
-                };
-
-                var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(config["Jwt:Key"]));
-                var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
-
-                var token = new JwtSecurityToken(
-                    config["Jwt:Issuer"],
-                    config["Jwt:Audience"],
-                    claims,
-                    expires: DateTime.Now.AddDays(1),
-                    signingCredentials: creds);
-
-                await LogService.Log(LogType.Login, $"User {login.Username} logged in.", db, user);
-                return Results.Ok(new
-                {
-                    token = new JwtSecurityTokenHandler().WriteToken(token)
-                });
-            })
+        group.MapPost("/login", LoginService.UserLogin)
             .WithName("UserLogin")
             .WithTags("User")
             .Produces(StatusCodes.Status200OK)
@@ -242,7 +154,7 @@ public static class UserEndpoints
             });
         group.MapGet("/get-logs", LogService.ListUserLogs)
             .WithName("UserGetLogs")
-            .WithTags("Logs")
+            .WithTags("User")
             .Produces(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status401Unauthorized)
             .WithOpenApi(operation =>

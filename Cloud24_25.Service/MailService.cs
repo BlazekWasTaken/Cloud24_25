@@ -5,7 +5,7 @@ namespace Cloud24_25.Service;
 
 public static class MailService
 {
-    public static async Task SendConfirmationEmail(IResend resend, string to, string code, User user)
+    public static async Task<ResendResponse> SendConfirmationEmail(IResend resend, User user)
     {
         var message = new EmailMessage
         {
@@ -14,20 +14,19 @@ public static class MailService
                 Email = "cloud24-25@bdymek.com",
                 DisplayName = "Cloud24-25 File Storage"
             },
-            To = to,
+            To = user.Email,
             Subject = "Confirm your email",
             HtmlBody = 
-                "<div>" +
-                    $"<strong>Hi {user.UserName}!</strong>" +
-                    "<strong>Your code is:</strong>" +
-                    "<table style=\"border: 1px solid black;\">" +
+                "<div style=\"text-align: center;\">" +
+                    $"<p><strong>Hi {user.UserName}!</strong></p>" +
+                    "<p>Your code is:</p>" +
+                    "<table style=\"border: 1px solid black; border-spacing: 10px; margin: 0 auto;\">" +
                         "<tr>" +
-                            $"<td>{code}</td>" +
+                            $"<td>{user.ConfirmationCode}</td>" +
                         "</tr>" +
                     "</table>" +
                 "</div>"
         };
-        
-        await resend.EmailSendAsync( message );
+        return await resend.EmailSendAsync( message );
     }
 }

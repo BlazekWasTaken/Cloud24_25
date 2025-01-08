@@ -12,14 +12,12 @@ using Resend;
 
 var builder = WebApplication.CreateBuilder(args);
 
-//maile
 builder.Services.AddOptions();
+
+// Resend
 builder.Services.AddHttpClient<ResendClient>();
 var token = Environment.GetEnvironmentVariable( "RESEND_APITOKEN" )!;
-builder.Services.Configure<ResendClientOptions>( o =>
-{
-    o.ApiToken = token;
-} );
+builder.Services.Configure<ResendClientOptions>(o => { o.ApiToken = token; });
 builder.Services.AddTransient<IResend, ResendClient>();
 
 // Swagger
@@ -68,11 +66,15 @@ builder.Services.AddDbContext<MyDbContext>();
 // Identity
 builder.Services.AddIdentityCore<User>(options =>
 {
-    options.Password.RequireDigit = false;
+    // Change after testing
     options.Password.RequiredLength = 3;
+    options.Password.RequireDigit = false;
     options.Password.RequireNonAlphanumeric = false;
     options.Password.RequireUppercase = false;
     options.Password.RequireLowercase = false;
+    
+    options.User.RequireUniqueEmail = true;
+    options.SignIn.RequireConfirmedEmail = true;
 })
 .AddRoles<IdentityRole>()
 .AddEntityFrameworkStores<MyDbContext>()
@@ -98,14 +100,18 @@ builder.Services.AddAuthentication(options =>
         ValidateLifetime = true,
         ValidateIssuerSigningKey = true,
         ValidIssuer = builder.Configuration["Jwt:Issuer"],
-        ValidAudience = builder.Configuration["Jwt:Audience"],
+        ValidAudiences = [
+            builder.Configuration["Jwt:Audience"],
+            builder.Configuration["Jwt:AdminAudience"]
+        ],
         IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]))
     };
 });
 
 // Authorization
 builder.Services.AddAuthorizationBuilder()
-    .AddPolicy("AdminOnly", policy => policy.RequireRole("Admin"));
+    .AddPolicy("AdminOnly", policy => policy.RequireRole("Admin"))
+    .AddPolicy("UserOrAdmin", policy => policy.RequireRole("Admin", "User"));
 
 // Kestrel config
 builder.Services.Configure<KestrelServerOptions>(options =>

@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using Cloud24_25.Infrastructure;
 using Cloud24_25.Infrastructure.Model;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Primitives;
@@ -31,9 +32,7 @@ public static class FileService
             TimeoutMillis = 1000 * 1000,
             RetryConfiguration = new RetryConfiguration
             {
-                // maximum number of attempts to retry the same request
                 MaxAttempts = 5,
-                // retries the request if the response status code is in the range [400-499] or [500-599]
                 RetryableStatusCodeFamilies = [4, 5]
             }
         });
@@ -41,7 +40,7 @@ public static class FileService
     public static async Task<IResult> UploadFileAsync(
         HttpContext context,
         IFormFile myFile,
-        StringValues hashes,
+        [FromForm] StringValues hashes,
         MyDbContext db)
     {
         var endpointUser = context.User;
@@ -88,7 +87,6 @@ public static class FileService
                 await SaveFile(user, entry.Open(), entry.Name, contentType, entry.Length, db);
             }
         }
-        
         return Results.Ok();
     }
     public static async Task<IResult> ListFiles(
@@ -251,9 +249,7 @@ public static class FileService
             }
 
             var name = toDownload.First(x => x.Revisions.Contains(revision)).Name;
-            
             objects.Add((objectStream, name));
-            
             await LogService.Log(LogType.FileDownload, $"{username} downloaded a file called {name}.", db, user);
         }
         var archive = CreateZipArchive(objects);
@@ -346,7 +342,6 @@ public static class FileService
             NamespaceName = NamespaceName,
             ObjectName = objectName
         };
-
         return await Client.GetObject(getObjectRequest);
     }
     private static async Task DeleteObject(string objectName)
