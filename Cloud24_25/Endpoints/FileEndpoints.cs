@@ -37,7 +37,7 @@ public static class FileEndpoints
                 return operation;
             });
         group.MapGet("/{fileId}", FileService.DownloadFile)
-            .WithName("Download")
+            .WithName("DownloadFile")
             .WithTags("Files")
             .Produces(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status401Unauthorized)
@@ -58,7 +58,7 @@ public static class FileEndpoints
             });
         
         group.MapPost("/upload", FileService.UploadFileAsync)
-            .WithName("Upload")
+            .WithName("UploadFile")
             .WithTags("Files")
             .Produces(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status400BadRequest)
@@ -91,7 +91,7 @@ public static class FileEndpoints
             .DisableAntiforgery();
         
         group.MapDelete("/{fileId}", FileService.DeleteFile)
-            .WithName("UserDeleteFile")
+            .WithName("DeleteFile")
             .WithTags("Files")
             .Produces(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status400BadRequest)

@@ -9,7 +9,7 @@
       "applicationUrl": "https://localhost:7039",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
-        "RESEND_APITOKEN": "",
+        "RESEND_APITOKEN": "re_bFDyR5w9_Nwchb5gRxvdoLUxfJMxr2iV4",
         "API_URL": "https://localhost:7029"
       }
     }

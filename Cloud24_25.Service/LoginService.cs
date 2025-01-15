@@ -63,7 +63,10 @@ public static class LoginService
         
         await LogService.Log(LogType.Register, $"{role} {registration.Username} successfully registered", db,
             user);
-        return Results.Ok(new { Message = $"{role} registered successfully" });
+        return Results.Ok(new
+        {
+            id = user.Id
+        });
     }
     private static async Task<IResult> Login(LoginDto login,
         UserManager<User> userManager,

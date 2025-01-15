@@ -404,4 +404,114 @@ public static class FileService
         var userFilesSize = user.Files.Sum(x => x.Revisions.Sum(y => y.Size));
         return Results.Ok(Space - userFilesSize); 
     }
+    
+    public static async Task<IResult> DownloadRevision(
+        HttpContext context,
+        MyDbContext db,
+        Guid id)
+    {
+        var endpointUser = context.User;
+        var username = endpointUser.Identity?.Name;
+        if (username == null)
+        {
+            await LogService.Log(LogType.FileDownloadAttempt, "There was an attempt to download a file, but user's credentials are incorrect.", db, null);
+            return Results.Unauthorized();
+        }
+
+        if (!db.Users.Any() || !db.Users.Any(x => x.UserName == username))
+        {
+            await LogService.Log(LogType.FileDownloadAttempt, $"User {username} was not found.", db, null);
+            return Results.NotFound();
+        }
+        
+        var user = db.Users
+            .Include(x => x.Files)
+            .ThenInclude(x => x.Revisions)
+            .First(x => x.UserName == username);
+        var userFiles = user.Files;
+        
+        var revisionToDownload = db.FileRevisions.FirstOrDefault(x => x.Id == id);
+        if (revisionToDownload is null)
+        {
+            await LogService.Log(LogType.FileDownloadAttempt, $"Revision {id} was not found.", db, user);
+            return Results.NotFound();
+        }
+        var fileWithRevision = userFiles.FirstOrDefault(x => x.Revisions.Contains(revisionToDownload));
+        if (fileWithRevision is null)
+        {
+            await LogService.Log(LogType.FileDownloadAttempt, $"File with revision {id} was not found.", db, user);
+            return Results.NotFound();
+        }
+        
+        var objectStream = await GetObject(revisionToDownload.ObjectName);
+        if (objectStream.InputStream is null)
+        {
+            await LogService.Log(LogType.FileDownloadAttempt, $"{username} attempted to download a file, but the file was not found.", db, user);
+            return Results.NotFound();
+        }
+        
+        await LogService.Log(LogType.FileDownload, $"{username} downloaded a revision from file called {fileWithRevision.Name}.", db, user);
+        return Results.File(objectStream.InputStream, fileWithRevision.ContentType, fileWithRevision.Name);
+    }
+    
+    public static async Task<IResult> DeleteRevision(
+        HttpContext context,
+        MyDbContext db,
+        Guid id) 
+    {
+        var endpointUser = context.User;
+        var username = endpointUser.Identity?.Name;
+        if (username == null)
+        {
+            await LogService.Log(LogType.FileDeleteAttempt, "There was an attempt to delete a file, but user's credentials are incorrect.", db, null);
+            return Results.Unauthorized();
+        }
+        if (!db.Users.Any() || !db.Users.Any(x => x.UserName == username))
+        {
+            await LogService.Log(LogType.FileDeleteAttempt, $"User {username} was not found.", db, null);
+            return Results.NotFound();
+        }
+        
+        var user = db.Users
+            .Include(x => x.Files)
+            .ThenInclude(x => x.Revisions)
+            .First(x => x.UserName == username);
+        var userFiles = user.Files;
+        
+        var revisionToDelete = db.FileRevisions.FirstOrDefault(x => x.Id == id);
+        if (revisionToDelete is null)
+        {
+            await LogService.Log(LogType.FileDeleteAttempt, $"Revision {id} was not found.", db, user);
+            return Results.NotFound();
+        }
+        var fileWithRevision = userFiles.FirstOrDefault(x => x.Revisions.Contains(revisionToDelete));
+        if (fileWithRevision is null)
+        {
+            await LogService.Log(LogType.FileDeleteAttempt, $"File with revision {id} was not found.", db, user);
+            return Results.NotFound();
+        }
+
+        try
+        {
+            await DeleteObject(revisionToDelete.ObjectName);
+            db.FileRevisions.Remove(revisionToDelete);
+            fileWithRevision.Revisions.Remove(revisionToDelete);
+            if (fileWithRevision.Revisions.Count == 0)
+            {
+                db.Files.Remove(fileWithRevision);
+                user.Files.Remove(fileWithRevision);
+            }
+            db.Users.Update(user);
+            
+            await db.SaveChangesAsync();
+        }
+        catch (Exception e)
+        {
+            await LogService.Log(LogType.FileDeleteAttempt, $"{username}'s file delete attempt failed. Message: {e.Message}", db, user);
+            throw;
+        }
+
+        await LogService.Log(LogType.FileDelete, $"{username} deleted a revision from file called {fileWithRevision.Name}", db, user);
+        return Results.Ok();
+    }
 }

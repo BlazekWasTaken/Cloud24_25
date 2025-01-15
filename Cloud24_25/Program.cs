@@ -14,6 +14,17 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddOptions();
 
+// CORS
+const string corsPolicyName = "corsPolicy";
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy(corsPolicyName, corsPolicyBuilder => corsPolicyBuilder
+        .WithOrigins("http://localhost:5173", "https://cloud.bdymek.com")
+        .AllowAnyHeader()
+        .AllowAnyMethod()
+        .AllowCredentials());
+});
+
 // Resend
 builder.Services.AddHttpClient<ResendClient>();
 var token = Environment.GetEnvironmentVariable( "RESEND_APITOKEN" )!;
@@ -136,6 +147,10 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+
+// CORS
+app.UseCors(corsPolicyName);
+
 app.UseAuthentication();
 app.UseAuthorization();
 
@@ -143,5 +158,6 @@ app.UseAuthorization();
 app.MapGroup("user").MapUserEndpoints();
 app.MapGroup("admin").MapAdminEndpoints();
 app.MapGroup("files").MapFileEndpoints();
+app.MapGroup("revisions").MapRevisionEndpoints();
 
 app.Run();
